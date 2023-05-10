@@ -1,0 +1,19 @@
+{
+    "python.defaultInterpreterPath": "~/.conda/envs/${env:RepositoryName}/bin/python",
+    "pylint.path": ["~/.conda/envs/${env:RepositoryName}/bin/pylint"],
+    "pylint.args": [
+        "--disable=missing-module-docstring",
+        "--disable=missing-class-docstring",
+        "--disable=missing-function-docstring"
+    ],
+    "python.analysis.typeCheckingMode": "basic",
+    "python.formatting.provider": "none",
+    "[python]": {
+        "editor.defaultFormatter": "ms-python.black-formatter",
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+            "source.organizeImports": true
+        },
+    },
+    "isort.args":["--profile", "black"],
+}

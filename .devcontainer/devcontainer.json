@@ -1,6 +1,6 @@
 {
 	"name": "conda-server",
-	"image": "mcr.microsoft.com/devcontainers/miniconda:0-3",
+	"dockerFile": "Dockerfile",
 	"customizations": {
 		"vscode": {
 			"extensions": [
@@ -11,17 +11,8 @@
 				"ms-python.isort",
 				"github.copilot",
         		"github.copilot-labs"
-			],
-			"settings": {
-				"python.defaultInterpreterPath": "/opt/conda/envs/conda-server/bin/python",
-				"pylint.path": ["/opt/conda/envs/conda-server/bin/pylint"],
-				"pylint.args": [
-					"--disable=missing-module-docstring",
-					"--disable=missing-class-docstring",
-					"--disable=missing-function-docstring"
-				]
-			}
+			]
 		}
 	},
-	"onCreateCommand": "./.devcontainer/on-create.sh"
+	"onCreateCommand": "mamba env create -f environment.yml -n $RepositoryName && echo 'mamba activate $RepositoryName' >> ~/.bashrc"
 }
