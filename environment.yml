@@ -3,4 +3,6 @@ dependencies:
   - pip
   - pip:
     - fastapi[all]
+    - black
     - pylint
+    - isort

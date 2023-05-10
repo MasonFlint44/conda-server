@@ -1,11 +1,17 @@
 {
     "python.defaultInterpreterPath": "~/.conda/envs/${env:RepositoryName}/bin/python",
-    "pylint.path": ["~/.conda/envs/${env:RepositoryName}/bin/pylint"],
+    "black-formatter.interpreter": ["/home/vscode/.conda/envs/conda-server/bin/python"],
+    "pylint.interpreter": ["/home/vscode/.conda/envs/conda-server/bin/python"],
+    "isort.interpreter": ["/home/vscode/.conda/envs/conda-server/bin/python"],
+    "black-formatter.path": ["/home/vscode/.conda/envs/conda-server/bin/black"],
+    "pylint.path": ["/home/vscode/.conda/envs/conda-server/bin/pylint"],
+    "isort.path": ["/home/vscode/.conda/envs/conda-server/bin/isort"],
     "pylint.args": [
         "--disable=missing-module-docstring",
         "--disable=missing-class-docstring",
         "--disable=missing-function-docstring"
     ],
+    "isort.args": ["--profile", "black"],
     "python.analysis.typeCheckingMode": "basic",
     "python.formatting.provider": "none",
     "[python]": {
@@ -13,7 +19,6 @@
         "editor.formatOnSave": true,
         "editor.codeActionsOnSave": {
             "source.organizeImports": true
-        },
-    },
-    "isort.args":["--profile", "black"],
+        }
+    }
 }
