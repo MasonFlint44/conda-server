@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/devcontainers/python:3.11-bullseye
+FROM mcr.microsoft.com/devcontainers/base:0-bullseye
 
 ARG USERNAME=vscode
 
