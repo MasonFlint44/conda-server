@@ -1,4 +1,18 @@
 {
-  "name": "conda-server",
-  "image": "mcr.microsoft.com/devcontainers/miniconda:0-3"
+	"name": "conda-server",
+	"dockerFile": "Dockerfile",
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"ms-python.python",
+				"ms-python.vscode-pylance",
+				"ms-python.pylint",
+				"ms-python.black-formatter",
+				"ms-python.isort",
+				"github.copilot",
+        		"github.copilot-labs"
+			]
+		}
+	},
+	"onCreateCommand": "mamba env create -f environment.yml -n $RepositoryName && echo 'mamba activate $RepositoryName' >> ~/.bashrc"
 }
