@@ -1,0 +1,7 @@
+name: conda-server
+dependencies:
+  - python=3.11
+  - pip
+  - pip:
+    - fastapi[all]
+    - pylint

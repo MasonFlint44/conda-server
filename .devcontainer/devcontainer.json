@@ -1,4 +1,27 @@
 {
-  "name": "conda-server",
-  "image": "mcr.microsoft.com/devcontainers/miniconda:0-3"
+	"name": "conda-server",
+	"image": "mcr.microsoft.com/devcontainers/miniconda:0-3",
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"ms-python.python",
+				"ms-python.vscode-pylance",
+				"ms-python.pylint",
+				"ms-python.black-formatter",
+				"ms-python.isort",
+				"github.copilot",
+        		"github.copilot-labs"
+			],
+			"settings": {
+				"python.defaultInterpreterPath": "/opt/conda/envs/conda-server/bin/python",
+				"pylint.path": ["/opt/conda/envs/conda-server/bin/pylint"],
+				"pylint.args": [
+					"--disable=missing-module-docstring",
+					"--disable=missing-class-docstring",
+					"--disable=missing-function-docstring"
+				]
+			}
+		}
+	},
+	"onCreateCommand": "./.devcontainer/on-create.sh"
 }
