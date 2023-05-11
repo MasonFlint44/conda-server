@@ -7,6 +7,7 @@ from fastapi import Depends, FastAPI, File, HTTPException, Security, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.security.api_key import APIKeyHeader
 
+from .atomic import atomic_write
 from .utils import (
     add_package_to_json,
     get_package_file_name,
@@ -15,7 +16,6 @@ from .utils import (
     remove_package_from_json,
 )
 
-# TODO: implement locking mechanism to prevent multiple processes from writing to the same file at the same time
 # TODO: implement authentication
 # TODO: implement logging
 # TODO: implement rate limiting - should be configurable
@@ -79,7 +79,7 @@ async def upload_package(
 
         # TODO: handle if an error occurs while writing to the file - should this use atomic writes?
         # Open a file and write the uploaded content to it chunk by chunk
-        with open(file_path, "wb") as buffer:
+        with atomic_write(file_path, mode="wb") as buffer:
             shutil.copyfileobj(file_.file, buffer)
 
         # Open repodata.json and channeldata.json and add the new package

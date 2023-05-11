@@ -3,6 +3,7 @@ dependencies:
   - pip
   - pip:
     - fastapi[all]
+    - filelock
     - black
     - pylint
     - isort
