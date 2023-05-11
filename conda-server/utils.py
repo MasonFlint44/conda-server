@@ -1,8 +1,40 @@
 import functools
 import json
 import os
+import re
+
+from fastapi import HTTPException
 
 from .atomic import atomic_write
+
+_package_name_regex = re.compile(r"^[a-z][a-z0-9_]*$")
+_package_version_regex = re.compile(
+    r"^(\d+\.\d+\.\d+)(?:[a-zA-Z-][0-9a-zA-Z-]*(?:\.[0-9a-zA-Z-]*)*)?$"
+)
+_package_build_regex = re.compile(r"^\d+[a-zA-Z0-9_.]*$")
+_platform_regex = re.compile(
+    r"^(linux-32|linux-64|linux-armv6l|linux-armv7l|linux-aarch64|osx-64|osx-arm64|win-32|win-64|noarch)$"
+)
+
+
+def validate_package_name(package_name: str) -> None:
+    if not _package_name_regex.match(package_name):
+        raise HTTPException(status_code=400, detail="Invalid package name")
+
+
+def validate_package_version(package_version: str) -> None:
+    if not _package_version_regex.match(package_version):
+        raise HTTPException(status_code=400, detail="Invalid package version")
+
+
+def validate_package_build(package_build: str) -> None:
+    if not _package_build_regex.match(package_build):
+        raise HTTPException(status_code=400, detail="Invalid package build")
+
+
+def validate_platform(platform: str) -> None:
+    if not _platform_regex.match(platform):
+        raise HTTPException(status_code=400, detail="Invalid package platform")
 
 
 @functools.lru_cache

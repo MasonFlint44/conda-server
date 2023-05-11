@@ -14,6 +14,10 @@ from .utils import (
     get_package_file_path,
     get_server_packages,
     remove_package_from_json,
+    validate_package_build,
+    validate_package_name,
+    validate_package_version,
+    validate_platform,
 )
 
 # TODO: implement authentication
@@ -22,7 +26,7 @@ from .utils import (
 # TODO: might move writing to JSON files to a separate thread or process
 # TODO: add configurable file size limit
 # TODO: configurable timeout? - might be useful for large uploads
-# TODO: add validation for parameters like package name, version, build, etc.
+# TODO: implement search endpoints
 # TODO: abstract away the file system to make it easier to implement other backing stores
 # TODO: implement s3 backing store
 # TODO: implement postgres backing store
@@ -46,6 +50,11 @@ def get_api_key(
 async def fetch_package(
     platform: str, package_name: str, package_version: str, package_build: str
 ):
+    validate_platform(platform)
+    validate_package_name(package_name)
+    validate_package_version(package_version)
+    validate_package_build(package_build)
+
     file_name = get_package_file_name(package_name, package_version, package_build)
     file_path = get_package_file_path(get_server_packages(), platform, file_name)
 
@@ -70,6 +79,11 @@ async def upload_package(
     file_: UploadFile = File(...),
     api_key: APIKeyHeader = Depends(get_api_key),
 ):
+    validate_platform(platform)
+    validate_package_name(package_name)
+    validate_package_version(package_version)
+    validate_package_build(package_build)
+
     try:
         # Make sure the directory exists before we start writing files to it
         os.makedirs(os.path.join(get_server_packages(), platform), exist_ok=True)
@@ -77,7 +91,7 @@ async def upload_package(
         file_name = get_package_file_name(package_name, package_version, package_build)
         file_path = get_package_file_path(get_server_packages(), platform, file_name)
 
-        # TODO: handle if an error occurs while writing to the file - should this use atomic writes?
+        # TODO: handle if an error occurs while writing to the file
         # Open a file and write the uploaded content to it chunk by chunk
         with atomic_write(file_path, mode="wb") as buffer:
             shutil.copyfileobj(file_.file, buffer)
@@ -105,6 +119,11 @@ async def delete_package(
     package_build: str,
     api_key: APIKeyHeader = Depends(get_api_key),
 ):
+    validate_platform(platform)
+    validate_package_name(package_name)
+    validate_package_version(package_version)
+    validate_package_build(package_build)
+
     file_name = get_package_file_name(package_name, package_version, package_build)
     file_path = get_package_file_path(get_server_packages(), platform, file_name)
 
@@ -130,6 +149,11 @@ async def delete_package(
 async def fetch_sha256(
     platform: str, package_name: str, package_version: str, package_build: str
 ):
+    validate_platform(platform)
+    validate_package_name(package_name)
+    validate_package_version(package_version)
+    validate_package_build(package_build)
+
     file_name = get_package_file_name(package_name, package_version, package_build)
     file_path = get_package_file_path(get_server_packages(), platform, file_name)
 
@@ -150,6 +174,8 @@ async def fetch_sha256(
 
 @app.get("/{platform}/repodata.json")
 async def fetch_repodata(platform: str):
+    validate_platform(platform)
+
     # Construct the filepath
     file_path = get_package_file_path(get_server_packages(), platform, "repodata.json")
 
@@ -167,6 +193,8 @@ async def fetch_repodata(platform: str):
 
 @app.get("/{platform}/channeldata.json")
 async def fetch_channeldata(platform: str):
+    validate_platform(platform)
+
     # Construct the filepath
     file_path = get_package_file_path(
         get_server_packages(), platform, "channeldata.json"
