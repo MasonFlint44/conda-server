@@ -13,7 +13,7 @@ _package_version_regex = re.compile(
 )
 _package_build_regex = re.compile(r"^\d+[a-zA-Z0-9_.]*$")
 _platform_regex = re.compile(
-    r"^(linux-32|linux-64|linux-armv6l|linux-armv7l|linux-aarch64|osx-64|osx-arm64|win-32|win-64|noarch)$"
+    r"^(linux-32|linux-64|linux-armv6l|linux-armv7l|linux-aarch64|osx-64|osx-arm64|win-32|win-64|noarch)$"  # pylint: disable=line-too-long
 )
 
 

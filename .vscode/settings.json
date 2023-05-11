@@ -9,7 +9,9 @@
     "pylint.args": [
         "--disable=missing-module-docstring",
         "--disable=missing-class-docstring",
-        "--disable=missing-function-docstring"
+        "--disable=missing-function-docstring",
+        "--good-names=i,j,k,ex,_,a,b,c,d,e,f,g,h,l,m,n,o,p,q,r,s,t,u,v,w,x,y,z",
+        "--max-args=6"
     ],
     "isort.args": ["--profile", "black"],
     "python.analysis.typeCheckingMode": "basic",

@@ -91,18 +91,31 @@ async def upload_package(
         file_name = get_package_file_name(package_name, package_version, package_build)
         file_path = get_package_file_path(get_server_packages(), platform, file_name)
 
-        # TODO: handle if an error occurs while writing to the file
-        # Open a file and write the uploaded content to it chunk by chunk
-        with atomic_write(file_path, mode="wb") as buffer:
-            shutil.copyfileobj(file_.file, buffer)
+        try:
+            # Open a file and write the uploaded content to it chunk by chunk
+            with atomic_write(file_path, mode="wb") as buffer:
+                shutil.copyfileobj(file_.file, buffer)
+        except Exception as e:
+            raise HTTPException(
+                status_code=500, detail=f"Error writing to file: {str(e)}"
+            ) from e
 
-        # Open repodata.json and channeldata.json and add the new package
-        add_package_to_json(
-            platform, package_name, package_version, package_build, "repodata.json"
-        )
-        add_package_to_json(
-            platform, package_name, package_version, package_build, "channeldata.json"
-        )
+        try:
+            # Open repodata.json and channeldata.json and add the new package
+            add_package_to_json(
+                platform, package_name, package_version, package_build, "repodata.json"
+            )
+            add_package_to_json(
+                platform,
+                package_name,
+                package_version,
+                package_build,
+                "channeldata.json",
+            )
+        except Exception as e:
+            raise HTTPException(
+                status_code=500, detail=f"Error updating JSON files: {str(e)}"
+            ) from e
 
     finally:
         # Always close the file, even if an error occurs
