@@ -10,9 +10,11 @@ from fastapi.security.api_key import APIKeyHeader
 from .atomic import atomic_write
 from .utils import (
     add_package_to_json,
+    create_json_file,
     get_package_file_name,
     get_package_file_path,
-    get_server_packages,
+    get_platforms,
+    get_server_packages_path,
     remove_package_from_json,
     validate_package_build,
     validate_package_name,
@@ -20,19 +22,22 @@ from .utils import (
     validate_platform,
 )
 
+# TODO: nothing creates the repodata.json and channeldata.json files if they don't exist
+# TODO: validate uploaded file is a valid .tar.bz2 file
+# TODO: validate uploaded file is a valid conda package
 # TODO: implement authentication
 # TODO: implement logging
 # TODO: implement rate limiting - should be configurable
 # TODO: might move writing to JSON files to a separate thread or process
 # TODO: add configurable file size limit
-# TODO: configurable timeout? - might be useful for large uploads
+# TODO: configurable timeout (set timeout on filelock)? - might be useful for large uploads
 # TODO: implement search endpoints
 # TODO: abstract away the file system to make it easier to implement other backing stores
 # TODO: implement s3 backing store
 # TODO: implement postgres backing store
 
 
-API_KEY = os.getenv("CONDA_SERVER_API_KEY")
+API_KEY = os.getenv("CONDA_SERVER_API_KEY", "secret")
 API_KEY_NAME = "X-API-Key"
 
 app = FastAPI()
@@ -56,7 +61,7 @@ async def fetch_package(
     validate_package_build(package_build)
 
     file_name = get_package_file_name(package_name, package_version, package_build)
-    file_path = get_package_file_path(get_server_packages(), platform, file_name)
+    file_path = get_package_file_path(get_server_packages_path(), platform, file_name)
 
     # Check if file exists
     if not os.path.isfile(file_path):
@@ -76,7 +81,7 @@ async def upload_package(
     package_name: str,
     package_version: str,
     package_build: str,
-    file_: UploadFile = File(...),
+    file: UploadFile = File(...),
     api_key: APIKeyHeader = Depends(get_api_key),
 ):
     validate_platform(platform)
@@ -86,15 +91,17 @@ async def upload_package(
 
     try:
         # Make sure the directory exists before we start writing files to it
-        os.makedirs(os.path.join(get_server_packages(), platform), exist_ok=True)
+        os.makedirs(os.path.join(get_server_packages_path(), platform), exist_ok=True)
 
         file_name = get_package_file_name(package_name, package_version, package_build)
-        file_path = get_package_file_path(get_server_packages(), platform, file_name)
+        file_path = get_package_file_path(
+            get_server_packages_path(), platform, file_name
+        )
 
         try:
             # Open a file and write the uploaded content to it chunk by chunk
             with atomic_write(file_path, mode="wb") as buffer:
-                shutil.copyfileobj(file_.file, buffer)
+                shutil.copyfileobj(file.file, buffer)
         except Exception as e:
             raise HTTPException(
                 status_code=500, detail=f"Error writing to file: {str(e)}"
@@ -119,9 +126,9 @@ async def upload_package(
 
     finally:
         # Always close the file, even if an error occurs
-        file_.file.close()
+        file.file.close()
 
-    return {"message": "File uploaded successfully"}
+    return {"message": "Package uploaded successfully"}
 
 
 @app.delete("/{platform}/{package_name}-{package_version}-{package_build}.tar.bz2")
@@ -138,7 +145,7 @@ async def delete_package(
     validate_package_build(package_build)
 
     file_name = get_package_file_name(package_name, package_version, package_build)
-    file_path = get_package_file_path(get_server_packages(), platform, file_name)
+    file_path = get_package_file_path(get_server_packages_path(), platform, file_name)
 
     # Check if file exists
     if not os.path.isfile(file_path):
@@ -146,6 +153,7 @@ async def delete_package(
 
     # Remove the file
     os.remove(file_path)
+    os.remove(f"{file_path}.lock")
 
     # Open repodata.json and channeldata.json and remove the deleted package
     remove_package_from_json(
@@ -155,9 +163,10 @@ async def delete_package(
         platform, package_name, package_version, package_build, "channeldata.json"
     )
 
-    return {"message": "File deleted successfully"}
+    return {"message": "Package deleted successfully"}
 
 
+# TODO: is this endpoint necessary?
 @app.get("/{platform}/{package_name}-{package_version}-{package_build}.tar.bz2.sha256")
 async def fetch_sha256(
     platform: str, package_name: str, package_version: str, package_build: str
@@ -168,7 +177,7 @@ async def fetch_sha256(
     validate_package_build(package_build)
 
     file_name = get_package_file_name(package_name, package_version, package_build)
-    file_path = get_package_file_path(get_server_packages(), platform, file_name)
+    file_path = get_package_file_path(get_server_packages_path(), platform, file_name)
 
     # Check if file exists
     if not os.path.isfile(file_path):
@@ -190,7 +199,9 @@ async def fetch_repodata(platform: str):
     validate_platform(platform)
 
     # Construct the filepath
-    file_path = get_package_file_path(get_server_packages(), platform, "repodata.json")
+    file_path = get_package_file_path(
+        get_server_packages_path(), platform, "repodata.json"
+    )
 
     # Check if file exists
     if not os.path.isfile(file_path):
@@ -210,7 +221,7 @@ async def fetch_channeldata(platform: str):
 
     # Construct the filepath
     file_path = get_package_file_path(
-        get_server_packages(), platform, "channeldata.json"
+        get_server_packages_path(), platform, "channeldata.json"
     )
 
     # Check if file exists
@@ -223,3 +234,43 @@ async def fetch_channeldata(platform: str):
 
     # Return the data as a JSON response
     return JSONResponse(content=data)
+
+
+@app.on_event("startup")
+async def startup_event():
+    # Create the packages directory if it doesn't exist
+    os.makedirs(get_server_packages_path(), exist_ok=True)
+
+    # Create the repodata.json and channeldata.json files if they don't exist
+    for platform in get_platforms():
+        # TODO: create platform directories if they don't exist
+        create_json_file(
+            os.path.join(get_server_packages_path(), platform, "repodata.json")
+        )
+    create_json_file(os.path.join(get_server_packages_path(), "channeldata.json"))
+
+    # TODO: are there also root repodata.json and channeldata.json files that need to be created?
+
+    # TODO: need to adjust logic to handle correct file structure. It should look like this:
+    #   - packages
+    #       - linux-64
+    #           - package_name-version-build.tar.bz2
+    #           - package_name-version-build.tar.bz2.lock
+    #           - repodata.json
+    #           - repodata.json.bz2
+    #           - repodata_from_packages.json
+    #           - repodata_from_packages.json.bz2
+    #       - osx-64
+    #           - package_name-version-build.tar.bz2
+    #           - package_name-version-build.tar.bz2.lock
+    #           - repodata.json
+    #           - repodata.json.bz2
+    #           - repodata_from_packages.json
+    #           - repodata_from_packages.json.bz2
+    #       - other platforms
+    #           - ...
+    #   - channeldata.json
+    #   - rss.xml
+
+    # TODO: should we use `conda index` to generate the repodata.json files?
+    # https://docs.conda.io/projects/conda-build/en/3.21.x/concepts/generating-index.html

@@ -7,14 +7,34 @@ from fastapi import HTTPException
 
 from .atomic import atomic_write
 
+
+@functools.lru_cache(maxsize=1)
+def get_platforms() -> set[str]:
+    return {
+        "linux-32",
+        "linux-64",
+        "linux-aarch64",
+        "linux-armv6l",
+        "linux-armv7l",
+        "linux-ppc64",
+        "linux-ppc64le",
+        "linux-s390x",
+        "noarch",
+        "osx-64",
+        "osx-arm64",
+        "win-32",
+        "win-64",
+        "win-arm64",
+        "zos-z",
+    }
+
+
 _package_name_regex = re.compile(r"^[a-z][a-z0-9_]*$")
 _package_version_regex = re.compile(
     r"^(\d+\.\d+\.\d+)(?:[a-zA-Z-][0-9a-zA-Z-]*(?:\.[0-9a-zA-Z-]*)*)?$"
 )
-_package_build_regex = re.compile(r"^\d+[a-zA-Z0-9_.]*$")
-_platform_regex = re.compile(
-    r"^(linux-32|linux-64|linux-armv6l|linux-armv7l|linux-aarch64|osx-64|osx-arm64|win-32|win-64|noarch)$"  # pylint: disable=line-too-long
-)
+_package_build_regex = re.compile(r"^[A-Za-z0-9_\-\.]+$")
+_platform_regex = re.compile(rf"^({'|'.join(get_platforms())})$")
 
 
 def validate_package_name(package_name: str) -> None:
@@ -49,8 +69,16 @@ def get_package_file_path(packages: str, platform: str, file_name: str) -> str:
     return os.path.join(packages, platform, file_name)
 
 
-def get_server_packages() -> str:
-    return os.getenv("CONDA_SERVER_PACKAGES", "packages")
+def get_server_packages_path() -> str:
+    return os.getenv("CONDA_SERVER_PACKAGES_PATH", "packages")
+
+
+def create_json_file(path: str) -> None:
+    if os.path.isfile(path):
+        # File already exists
+        return
+    with atomic_write(path) as f:
+        json.dump({"packages": []}, f)
 
 
 def remove_package_from_json(
@@ -60,7 +88,7 @@ def remove_package_from_json(
     package_build: str,
     data_file: str,
 ) -> None:
-    file_path = get_package_file_path(get_server_packages(), platform, data_file)
+    file_path = get_package_file_path(get_server_packages_path(), platform, data_file)
     if not os.path.isfile(file_path):
         return
     with atomic_write(file_path) as f:
@@ -86,7 +114,7 @@ def add_package_to_json(
     package_build: str,
     data_file: str,
 ) -> None:
-    file_path = get_package_file_path(get_server_packages(), platform, data_file)
+    file_path = get_package_file_path(get_server_packages_path(), platform, data_file)
     if not os.path.isfile(file_path):
         return
     with atomic_write(file_path) as f:
