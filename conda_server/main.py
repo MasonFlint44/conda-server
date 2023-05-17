@@ -1,40 +1,34 @@
 import hashlib
-import json
 import os
 import shutil
 
 from fastapi import Depends, FastAPI, File, HTTPException, Security, UploadFile
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse
 from fastapi.security.api_key import APIKeyHeader
 
 from .atomic import atomic_write
 from .utils import (
-    add_package_to_json,
-    create_json_file,
     get_package_file_name,
     get_package_file_path,
-    get_platforms,
     get_server_packages_path,
-    remove_package_from_json,
+    validate_file_extension,
     validate_package_build,
     validate_package_name,
     validate_package_version,
     validate_platform,
 )
 
-# TODO: nothing creates the repodata.json and channeldata.json files if they don't exist
-# TODO: validate uploaded file is a valid .tar.bz2 file
+# TODO: implement package indexing mechanism - use `conda index`
 # TODO: validate uploaded file is a valid conda package
-# TODO: implement authentication
-# TODO: implement logging
+# TODO: implement authentication - should be configurable for both download and upload
+# TODO: add logging
 # TODO: implement rate limiting - should be configurable
-# TODO: might move writing to JSON files to a separate thread or process
 # TODO: add configurable file size limit
 # TODO: configurable timeout (set timeout on filelock)? - might be useful for large uploads
 # TODO: implement search endpoints
-# TODO: abstract away the file system to make it easier to implement other backing stores
-# TODO: implement s3 backing store
-# TODO: implement postgres backing store
+# TODO: abstract away the file system to make it easier to implement other backing stores - look into fuse and alternatives
+# TODO: implement s3 backing store - look into s3fs and alternatives
+# TODO: implement postgres backing store - look into dbfs and alternatives
 
 
 API_KEY = os.getenv("CONDA_SERVER_API_KEY", "secret")
@@ -51,36 +45,48 @@ def get_api_key(
     raise HTTPException(status_code=400, detail="API Key was not provided")
 
 
-@app.get("/{platform}/{package_name}-{package_version}-{package_build}.tar.bz2")
+@app.get(
+    "/{platform}/{package_name}-{package_version}-{package_build}.{file_extension}"
+)
 async def fetch_package(
-    platform: str, package_name: str, package_version: str, package_build: str
+    platform: str,
+    package_name: str,
+    package_version: str,
+    package_build: str,
+    file_extension: str,
 ):
     validate_platform(platform)
     validate_package_name(package_name)
     validate_package_version(package_version)
     validate_package_build(package_build)
+    validate_file_extension(file_extension)
 
-    file_name = get_package_file_name(package_name, package_version, package_build)
+    file_name = get_package_file_name(
+        package_name, package_version, package_build, file_extension
+    )
     file_path = get_package_file_path(get_server_packages_path(), platform, file_name)
-
-    # Check if file exists
-    if not os.path.isfile(file_path):
-        raise HTTPException(status_code=404, detail="File not found")
-
-    # Return the file as a response
-    return FileResponse(
-        path=file_path,
-        media_type="application/x-bzip2",
-        filename=file_name,
+    media_type = (
+        "application/x-tar"
+        if file_extension == "tar.bz2"
+        else "application/octet-stream"
     )
 
+    try:
+        # Return the file as a response
+        return FileResponse(path=file_path, media_type=media_type, filename=file_name)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail="File not found") from e
 
-@app.put("/{platform}/{package_name}-{package_version}-{package_build}.tar.bz2")
+
+@app.put(
+    "/{platform}/{package_name}-{package_version}-{package_build}.{file_extension}"
+)
 async def upload_package(
     platform: str,
     package_name: str,
     package_version: str,
     package_build: str,
+    file_extension: str,
     file: UploadFile = File(...),
     api_key: APIKeyHeader = Depends(get_api_key),
 ):
@@ -88,42 +94,24 @@ async def upload_package(
     validate_package_name(package_name)
     validate_package_version(package_version)
     validate_package_build(package_build)
+    validate_file_extension(file_extension)
+
+    # Make sure the directory exists before we start writing files to it
+    os.makedirs(os.path.join(get_server_packages_path(), platform), exist_ok=True)
+
+    file_name = get_package_file_name(
+        package_name, package_version, package_build, file_extension
+    )
+    file_path = get_package_file_path(get_server_packages_path(), platform, file_name)
 
     try:
-        # Make sure the directory exists before we start writing files to it
-        os.makedirs(os.path.join(get_server_packages_path(), platform), exist_ok=True)
-
-        file_name = get_package_file_name(package_name, package_version, package_build)
-        file_path = get_package_file_path(
-            get_server_packages_path(), platform, file_name
-        )
-
-        try:
-            # Open a file and write the uploaded content to it chunk by chunk
-            with atomic_write(file_path, mode="wb") as buffer:
-                shutil.copyfileobj(file.file, buffer)
-        except Exception as e:
-            raise HTTPException(
-                status_code=500, detail=f"Error writing to file: {str(e)}"
-            ) from e
-
-        try:
-            # Open repodata.json and channeldata.json and add the new package
-            add_package_to_json(
-                platform, package_name, package_version, package_build, "repodata.json"
-            )
-            add_package_to_json(
-                platform,
-                package_name,
-                package_version,
-                package_build,
-                "channeldata.json",
-            )
-        except Exception as e:
-            raise HTTPException(
-                status_code=500, detail=f"Error updating JSON files: {str(e)}"
-            ) from e
-
+        # Open a file and write the uploaded content to it chunk by chunk
+        with atomic_write(file_path, mode="wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Error writing to file: {str(e)}"
+        ) from e
     finally:
         # Always close the file, even if an error occurs
         file.file.close()
@@ -131,20 +119,26 @@ async def upload_package(
     return {"message": "Package uploaded successfully"}
 
 
-@app.delete("/{platform}/{package_name}-{package_version}-{package_build}.tar.bz2")
+@app.delete(
+    "/{platform}/{package_name}-{package_version}-{package_build}.{file_extension}}"
+)
 async def delete_package(
     platform: str,
     package_name: str,
     package_version: str,
     package_build: str,
+    file_extension: str,
     api_key: APIKeyHeader = Depends(get_api_key),
 ):
     validate_platform(platform)
     validate_package_name(package_name)
     validate_package_version(package_version)
     validate_package_build(package_build)
+    validate_file_extension(file_extension)
 
-    file_name = get_package_file_name(package_name, package_version, package_build)
+    file_name = get_package_file_name(
+        package_name, package_version, package_build, file_extension
+    )
     file_path = get_package_file_path(get_server_packages_path(), platform, file_name)
 
     # Check if file exists
@@ -155,28 +149,28 @@ async def delete_package(
     os.remove(file_path)
     os.remove(f"{file_path}.lock")
 
-    # Open repodata.json and channeldata.json and remove the deleted package
-    remove_package_from_json(
-        platform, package_name, package_version, package_build, "repodata.json"
-    )
-    remove_package_from_json(
-        platform, package_name, package_version, package_build, "channeldata.json"
-    )
-
     return {"message": "Package deleted successfully"}
 
 
-# TODO: is this endpoint necessary?
-@app.get("/{platform}/{package_name}-{package_version}-{package_build}.tar.bz2.sha256")
+@app.get(
+    "/{platform}/{package_name}-{package_version}-{package_build}.{file_extension}/hash/sha256"
+)
 async def fetch_sha256(
-    platform: str, package_name: str, package_version: str, package_build: str
+    platform: str,
+    package_name: str,
+    package_version: str,
+    package_build: str,
+    file_extension: str,
 ):
     validate_platform(platform)
     validate_package_name(package_name)
     validate_package_version(package_version)
     validate_package_build(package_build)
+    validate_file_extension(file_extension)
 
-    file_name = get_package_file_name(package_name, package_version, package_build)
+    file_name = get_package_file_name(
+        package_name, package_version, package_build, file_extension
+    )
     file_path = get_package_file_path(get_server_packages_path(), platform, file_name)
 
     # Check if file exists
@@ -194,28 +188,63 @@ async def fetch_sha256(
     return {"sha256": sha256_hash.hexdigest()}
 
 
-@app.get("/{platform}/repodata.json")
-async def fetch_repodata(platform: str):
+@app.get(
+    "/{platform}/{package_name}-{package_version}-{package_build}.{file_extension}/hash/md5"
+)
+async def fetch_md5(
+    platform: str,
+    package_name: str,
+    package_version: str,
+    package_build: str,
+    file_extension: str,
+):
     validate_platform(platform)
+    validate_package_name(package_name)
+    validate_package_version(package_version)
+    validate_package_build(package_build)
+    validate_file_extension(file_extension)
 
-    # Construct the filepath
-    file_path = get_package_file_path(
-        get_server_packages_path(), platform, "repodata.json"
+    file_name = get_package_file_name(
+        package_name, package_version, package_build, file_extension
     )
+    file_path = get_package_file_path(get_server_packages_path(), platform, file_name)
 
     # Check if file exists
     if not os.path.isfile(file_path):
         raise HTTPException(status_code=404, detail="File not found")
 
-    # Read the JSON file
-    with open(file_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
+    # Calculate the MD5 hash
+    md5_hash = hashlib.md5()
 
-    # Return the data as a JSON response
-    return JSONResponse(content=data)
+    with open(file_path, "rb") as f:
+        # Read and update hash string value in blocks of 4K
+        for byte_block in iter(lambda: f.read(4096), b""):
+            md5_hash.update(byte_block)
+
+    return {"md5": md5_hash.hexdigest()}
 
 
-@app.get("/{platform}/channeldata.json")
+@app.get("/{platform}/{filename}.json")
+async def fetch_repodata(platform: str, filename: str):
+    validate_platform(platform)
+    if not filename in {"repodata", "repodata_from_packages", "patch_instructions"}:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    # Construct the filepath
+    file_path = get_package_file_path(
+        get_server_packages_path(), platform, f"{filename}.json"
+    )
+
+    try:
+        # Return the file as a response
+        return FileResponse(
+            path=file_path, media_type="application/json", filename=f"{filename}.json"
+        )
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail="File not found") from e
+
+
+@app.get("/channeldata.json")
 async def fetch_channeldata(platform: str):
     validate_platform(platform)
 
@@ -224,16 +253,13 @@ async def fetch_channeldata(platform: str):
         get_server_packages_path(), platform, "channeldata.json"
     )
 
-    # Check if file exists
-    if not os.path.isfile(file_path):
-        raise HTTPException(status_code=404, detail="File not found")
-
-    # Read the JSON file
-    with open(file_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
-
-    # Return the data as a JSON response
-    return JSONResponse(content=data)
+    try:
+        # Return the file as a response
+        return FileResponse(
+            path=file_path, media_type="application/json", filename="channeldata.json"
+        )
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail="File not found") from e
 
 
 @app.on_event("startup")
@@ -241,36 +267,5 @@ async def startup_event():
     # Create the packages directory if it doesn't exist
     os.makedirs(get_server_packages_path(), exist_ok=True)
 
-    # Create the repodata.json and channeldata.json files if they don't exist
-    for platform in get_platforms():
-        # TODO: create platform directories if they don't exist
-        create_json_file(
-            os.path.join(get_server_packages_path(), platform, "repodata.json")
-        )
-    create_json_file(os.path.join(get_server_packages_path(), "channeldata.json"))
-
-    # TODO: are there also root repodata.json and channeldata.json files that need to be created?
-
-    # TODO: need to adjust logic to handle correct file structure. It should look like this:
-    #   - packages
-    #       - linux-64
-    #           - package_name-version-build.tar.bz2
-    #           - package_name-version-build.tar.bz2.lock
-    #           - repodata.json
-    #           - repodata.json.bz2
-    #           - repodata_from_packages.json
-    #           - repodata_from_packages.json.bz2
-    #       - osx-64
-    #           - package_name-version-build.tar.bz2
-    #           - package_name-version-build.tar.bz2.lock
-    #           - repodata.json
-    #           - repodata.json.bz2
-    #           - repodata_from_packages.json
-    #           - repodata_from_packages.json.bz2
-    #       - other platforms
-    #           - ...
-    #   - channeldata.json
-    #   - rss.xml
-
-    # TODO: should we use `conda index` to generate the repodata.json files?
-    # https://docs.conda.io/projects/conda-build/en/3.21.x/concepts/generating-index.html
+    # TODO: use `conda index` to generate the index files
+    # https://docs.conda.io/projects/conda-build/en/stable/concepts/generating-index.html

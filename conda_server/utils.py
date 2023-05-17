@@ -1,11 +1,8 @@
 import functools
-import json
 import os
 import re
 
 from fastapi import HTTPException
-
-from .atomic import atomic_write
 
 
 @functools.lru_cache(maxsize=1)
@@ -29,22 +26,29 @@ def get_platforms() -> set[str]:
     }
 
 
-_package_name_regex = re.compile(r"^[a-z][a-z0-9_]*$")
+_package_name_regex = re.compile(r"^[a-z0-9_.-]+$")
+# https://semver.org/#is-there-a-suggested-regular-expression-regex-to-check-a-semver-string
 _package_version_regex = re.compile(
-    r"^(\d+\.\d+\.\d+)(?:[a-zA-Z-][0-9a-zA-Z-]*(?:\.[0-9a-zA-Z-]*)*)?$"
+    r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$"
 )
-_package_build_regex = re.compile(r"^[A-Za-z0-9_\-\.]+$")
+_package_build_regex = re.compile(r"^[a-z0-9_]+$")
 _platform_regex = re.compile(rf"^({'|'.join(get_platforms())})$")
+_file_extension_regex = re.compile(r"^(tar\.bz2|conda)$")
 
 
 def validate_package_name(package_name: str) -> None:
     if not _package_name_regex.match(package_name):
-        raise HTTPException(status_code=400, detail="Invalid package name")
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid package name - see https://docs.conda.io/projects/conda-build/en/latest/concepts/package-naming-conv.html#package-naming-conventions",
+        )
 
 
 def validate_package_version(package_version: str) -> None:
     if not _package_version_regex.match(package_version):
-        raise HTTPException(status_code=400, detail="Invalid package version")
+        raise HTTPException(
+            status_code=400, detail="Invalid package version - see https://semver.org/"
+        )
 
 
 def validate_package_build(package_build: str) -> None:
@@ -54,14 +58,19 @@ def validate_package_build(package_build: str) -> None:
 
 def validate_platform(platform: str) -> None:
     if not _platform_regex.match(platform):
-        raise HTTPException(status_code=400, detail="Invalid package platform")
+        raise HTTPException(status_code=400, detail="Unsupported package platform")
+
+
+def validate_file_extension(file_extension: str) -> None:
+    if not _file_extension_regex.match(file_extension):
+        raise HTTPException(status_code=400, detail="Unsupported file extension")
 
 
 @functools.lru_cache
 def get_package_file_name(
-    package_name: str, package_version: str, package_build: str
+    package_name: str, package_version: str, package_build: str, file_extension: str
 ) -> str:
-    return f"{package_name}-{package_version}-{package_build}.tar.bz2"
+    return f"{package_name}-{package_version}-{package_build}.{file_extension}"
 
 
 @functools.lru_cache
@@ -71,68 +80,3 @@ def get_package_file_path(packages: str, platform: str, file_name: str) -> str:
 
 def get_server_packages_path() -> str:
     return os.getenv("CONDA_SERVER_PACKAGES_PATH", "packages")
-
-
-def create_json_file(path: str) -> None:
-    if os.path.isfile(path):
-        # File already exists
-        return
-    with atomic_write(path) as f:
-        json.dump({"packages": []}, f)
-
-
-def remove_package_from_json(
-    platform: str,
-    package_name: str,
-    package_version: str,
-    package_build: str,
-    data_file: str,
-) -> None:
-    file_path = get_package_file_path(get_server_packages_path(), platform, data_file)
-    if not os.path.isfile(file_path):
-        return
-    with atomic_write(file_path) as f:
-        data = json.load(f)
-        data["packages"] = [
-            package
-            for package in data["packages"]
-            if not (
-                package["name"] == package_name
-                and package["version"] == package_version
-                and package["build"] == package_build
-            )
-        ]
-        f.seek(0)
-        json.dump(data, f)
-        f.truncate()
-
-
-def add_package_to_json(
-    platform: str,
-    package_name: str,
-    package_version: str,
-    package_build: str,
-    data_file: str,
-) -> None:
-    file_path = get_package_file_path(get_server_packages_path(), platform, data_file)
-    if not os.path.isfile(file_path):
-        return
-    with atomic_write(file_path) as f:
-        data = json.load(f)
-        if any(
-            package["name"] == package_name
-            and package["version"] == package_version
-            and package["build"] == package_build
-            for package in data["packages"]
-        ):
-            return
-        data["packages"].append(
-            {
-                "name": package_name,
-                "version": package_version,
-                "build": package_build,
-            }
-        )
-        f.seek(0)
-        json.dump(data, f)
-        f.truncate()
