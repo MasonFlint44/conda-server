@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/devcontainers/base:0-bullseye
+FROM mcr.microsoft.com/devcontainers/base:1-bookworm
 
 ARG USERNAME=vscode
 
@@ -6,7 +6,7 @@ ARG USERNAME=vscode
 RUN curl -L -O "https://github.com/conda-forge/miniforge/releases/latest/download/Mambaforge-$(uname)-$(uname -m).sh" && \
     bash Mambaforge-$(uname)-$(uname -m).sh -b -p /opt/conda && \
     rm Mambaforge-$(uname)-$(uname -m).sh
-
+    
 USER $USERNAME
 
 RUN /opt/conda/bin/mamba init && \

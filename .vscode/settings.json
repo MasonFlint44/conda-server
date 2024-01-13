@@ -1,25 +1,17 @@
 {
-    "python.defaultInterpreterPath": "~/.conda/envs/${env:RepositoryName}/bin/python",
-    "black-formatter.interpreter": ["/home/vscode/.conda/envs/conda-server/bin/python"],
-    "pylint.interpreter": ["/home/vscode/.conda/envs/conda-server/bin/python"],
-    "isort.interpreter": ["/home/vscode/.conda/envs/conda-server/bin/python"],
-    "black-formatter.path": ["/home/vscode/.conda/envs/conda-server/bin/black"],
-    "pylint.path": ["/home/vscode/.conda/envs/conda-server/bin/pylint"],
-    "isort.path": ["/home/vscode/.conda/envs/conda-server/bin/isort"],
+    "python.defaultInterpreterPath": "~/.conda/envs/${env:ENVIRONMENT_NAME}/bin/python",
+    "python.analysis.typeCheckingMode": "basic",
     "pylint.args": [
         "--disable=missing-module-docstring",
         "--disable=missing-class-docstring",
         "--disable=missing-function-docstring",
-        "--good-names=i,j,k,ex,_,a,b,c,d,e,f,g,h,l,m,n,o,p,q,r,s,t,u,v,w,x,y,z",
     ],
-    "isort.args": ["--profile", "black"],
-    "python.analysis.typeCheckingMode": "basic",
-    "python.formatting.provider": "none",
     "[python]": {
         "editor.defaultFormatter": "ms-python.black-formatter",
         "editor.formatOnSave": true,
         "editor.codeActionsOnSave": {
-            "source.organizeImports": true
+            "source.organizeImports": "explicit"
         }
-    }
+    },
+    "python.analysis.autoImportCompletions": true
 }

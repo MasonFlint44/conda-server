@@ -1,18 +1,21 @@
 {
 	"name": "conda-server",
 	"dockerFile": "Dockerfile",
+	"containerEnv": {
+		"ENVIRONMENT_NAME": "conda-server",
+	},
 	"customizations": {
 		"vscode": {
 			"extensions": [
 				"ms-python.python",
-				"ms-python.vscode-pylance",
 				"ms-python.pylint",
 				"ms-python.black-formatter",
 				"ms-python.isort",
 				"github.copilot",
-        		"github.copilot-labs"
+				"github.copilot-chat",
+				"ms-azuretools.vscode-docker"
 			]
 		}
 	},
-	"onCreateCommand": "mamba env create -f environment.yml -n $RepositoryName && echo 'mamba activate $RepositoryName' >> ~/.bashrc"
+	"postCreateCommand": "mamba env create -f environment.yml -n ${containerEnv:ENVIRONMENT_NAME} && echo 'mamba activate ${containerEnv:ENVIRONMENT_NAME}' >> ~/.bashrc"
 }

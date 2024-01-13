@@ -54,7 +54,7 @@ OpenTextMode = Literal[
     "trU",
     "tUr",
     "Utr",
-]  # pylint: disable=line-too-long
+]
 OpenBinaryMode = Literal[
     "rb+",
     "r+b",

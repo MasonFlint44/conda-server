@@ -25,36 +25,56 @@ def atomic_write(
 
 @contextmanager
 def atomic_write(path, mode="w", encoding=None):
-    with FileLock(f"{path}.lock") as lock:
-        # Open a temporary file in the same directory as the original file
-        # TODO: could we use SpooledTemporaryFile here?
+    """
+    Atomically write a file.
+    Protects against partial reads and writes, and ensures that the file
+    is either fully written or not written at all. Creates a lock file to
+    prevent other processes using this function from writing to the same
+    file concurrently.
+    """
+
+    if mode in {"r", "rb"}:
+        raise ValueError("File mode 'r' not allowed. Must be writable.")
+
+    # Acquire a lock to prevent concurrent writes to the same file
+    with FileLock(f"{path}.lock"):
+        # Create a temporary file in the same directory as the target file
         temp_file = tempfile.NamedTemporaryFile(
-            mode, dir=os.path.dirname(path), delete=False, encoding=encoding
+            mode,
+            encoding=encoding,
+            suffix=".tmp",
+            dir=os.path.dirname(path),
+            delete=False,
         )
         temp_path = temp_file.name
 
         try:
-            # If the file already exists, copy its content to the temporary file
-            if os.path.exists(path):
+            # If the file already exists, preserve its content by copying it to the temporary file.
+            # If the file is opened in write mode, the file is truncated and there is no need to
+            # copy the content.
+            if os.path.exists(path) and "w" not in mode:
                 read_mode = "rb" if "b" in mode else "r"
                 with open(path, read_mode, encoding=encoding) as original_file:
                     shutil.copyfileobj(original_file, temp_file)
-                # TODO: don't seek back to the beginning if the file is opened in append mode
-                # move back to the beginning of the temp file so the user can read from the start
-                temp_file.seek(0)
 
-            # This is the file that the user will interact with
+                # If the file is not opened in append mode, reset the file position to the
+                # beginning of the file.
+                if mode not in {"a", "ab", "a+", "ab+"}:
+                    temp_file.seek(0)
+
+            # Yield the temporary file for the user to write data
             yield temp_file
 
-            # Ensure all buffered outputs are flushed to the disk
-            temp_file.flush()
-            os.fsync(temp_file.fileno())
+            # Flush and sync the file to ensure all data is written to disk
+            if not temp_file.closed:
+                temp_file.flush()
+                os.fsync(temp_file.fileno())
             temp_file.close()
 
-            # Atomically replace the original file with the temp file
+            # Atomically replace the target file with the temporary file
             os.replace(temp_path, path)
         finally:
-            # Remove the temp file if it still exists
+            # Cleanup: close and remove the temporary file
             temp_file.close()
             try:
                 os.remove(temp_path)

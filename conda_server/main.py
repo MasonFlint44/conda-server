@@ -2,7 +2,7 @@ import hashlib
 import os
 import shutil
 
-from fastapi import Depends, FastAPI, File, HTTPException, Security, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, Security, UploadFile, Path
 from fastapi.responses import FileResponse
 from fastapi.security.api_key import APIKeyHeader
 
@@ -45,6 +45,7 @@ def get_api_key(
     raise HTTPException(status_code=400, detail="API Key was not provided")
 
 
+# TODO: should be able to use FastAPI's Path() to validate the parts of the path using regex
 @app.get(
     "/{platform}/{package_name}-{package_version}-{package_build}.{file_extension}"
 )
