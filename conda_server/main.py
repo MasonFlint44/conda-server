@@ -1,21 +1,22 @@
 import hashlib
 import os
 import shutil
+from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, File, HTTPException, Security, UploadFile, Path
+from fastapi import Depends, FastAPI, File, HTTPException, Path, Security, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.security.api_key import APIKeyHeader
 
 from .atomic import atomic_write
 from .utils import (
+    FILE_EXTENSION_REGEX,
+    PACKAGE_BUILD_REGEX,
+    PACKAGE_NAME_REGEX,
+    PACKAGE_VERSION_REGEX,
+    PLATFORM_REGEX,
     get_package_file_name,
     get_package_file_path,
     get_server_packages_path,
-    validate_file_extension,
-    validate_package_build,
-    validate_package_name,
-    validate_package_version,
-    validate_platform,
 )
 
 # TODO: implement package indexing mechanism - use `conda index`
@@ -34,7 +35,19 @@ from .utils import (
 API_KEY = os.getenv("CONDA_SERVER_API_KEY", "secret")
 API_KEY_NAME = "X-API-Key"
 
-app = FastAPI()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Create the packages directory if it doesn't exist
+    os.makedirs(get_server_packages_path(), exist_ok=True)
+
+    # TODO: use `conda index` to generate the index files
+    # https://docs.conda.io/projects/conda-build/en/stable/concepts/generating-index.html
+
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
 
 
 def get_api_key(
@@ -45,23 +58,16 @@ def get_api_key(
     raise HTTPException(status_code=400, detail="API Key was not provided")
 
 
-# TODO: should be able to use FastAPI's Path() to validate the parts of the path using regex
 @app.get(
     "/{platform}/{package_name}-{package_version}-{package_build}.{file_extension}"
 )
 async def fetch_package(
-    platform: str,
-    package_name: str,
-    package_version: str,
-    package_build: str,
-    file_extension: str,
+    platform: str = Path(pattern=PLATFORM_REGEX),
+    package_name: str = Path(pattern=PACKAGE_NAME_REGEX),
+    package_version: str = Path(pattern=PACKAGE_VERSION_REGEX),
+    package_build: str = Path(pattern=PACKAGE_BUILD_REGEX),
+    file_extension: str = Path(pattern=FILE_EXTENSION_REGEX),
 ):
-    validate_platform(platform)
-    validate_package_name(package_name)
-    validate_package_version(package_version)
-    validate_package_build(package_build)
-    validate_file_extension(file_extension)
-
     file_name = get_package_file_name(
         package_name, package_version, package_build, file_extension
     )
@@ -83,20 +89,14 @@ async def fetch_package(
     "/{platform}/{package_name}-{package_version}-{package_build}.{file_extension}"
 )
 async def upload_package(
-    platform: str,
-    package_name: str,
-    package_version: str,
-    package_build: str,
-    file_extension: str,
+    platform: str = Path(pattern=PLATFORM_REGEX),
+    package_name: str = Path(pattern=PACKAGE_NAME_REGEX),
+    package_version: str = Path(pattern=PACKAGE_VERSION_REGEX),
+    package_build: str = Path(pattern=PACKAGE_BUILD_REGEX),
+    file_extension: str = Path(pattern=FILE_EXTENSION_REGEX),
     file: UploadFile = File(...),
     api_key: APIKeyHeader = Depends(get_api_key),
 ):
-    validate_platform(platform)
-    validate_package_name(package_name)
-    validate_package_version(package_version)
-    validate_package_build(package_build)
-    validate_file_extension(file_extension)
-
     # Make sure the directory exists before we start writing files to it
     os.makedirs(os.path.join(get_server_packages_path(), platform), exist_ok=True)
 
@@ -121,22 +121,16 @@ async def upload_package(
 
 
 @app.delete(
-    "/{platform}/{package_name}-{package_version}-{package_build}.{file_extension}}"
+    "/{platform}/{package_name}-{package_version}-{package_build}.{file_extension}"
 )
 async def delete_package(
-    platform: str,
-    package_name: str,
-    package_version: str,
-    package_build: str,
-    file_extension: str,
+    platform: str = Path(pattern=PLATFORM_REGEX),
+    package_name: str = Path(pattern=PACKAGE_NAME_REGEX),
+    package_version: str = Path(pattern=PACKAGE_VERSION_REGEX),
+    package_build: str = Path(pattern=PACKAGE_BUILD_REGEX),
+    file_extension: str = Path(pattern=FILE_EXTENSION_REGEX),
     api_key: APIKeyHeader = Depends(get_api_key),
 ):
-    validate_platform(platform)
-    validate_package_name(package_name)
-    validate_package_version(package_version)
-    validate_package_build(package_build)
-    validate_file_extension(file_extension)
-
     file_name = get_package_file_name(
         package_name, package_version, package_build, file_extension
     )
@@ -157,18 +151,12 @@ async def delete_package(
     "/{platform}/{package_name}-{package_version}-{package_build}.{file_extension}/hash/sha256"
 )
 async def fetch_sha256(
-    platform: str,
-    package_name: str,
-    package_version: str,
-    package_build: str,
-    file_extension: str,
+    platform: str = Path(pattern=PLATFORM_REGEX),
+    package_name: str = Path(pattern=PACKAGE_NAME_REGEX),
+    package_version: str = Path(pattern=PACKAGE_VERSION_REGEX),
+    package_build: str = Path(pattern=PACKAGE_BUILD_REGEX),
+    file_extension: str = Path(pattern=FILE_EXTENSION_REGEX),
 ):
-    validate_platform(platform)
-    validate_package_name(package_name)
-    validate_package_version(package_version)
-    validate_package_build(package_build)
-    validate_file_extension(file_extension)
-
     file_name = get_package_file_name(
         package_name, package_version, package_build, file_extension
     )
@@ -193,18 +181,12 @@ async def fetch_sha256(
     "/{platform}/{package_name}-{package_version}-{package_build}.{file_extension}/hash/md5"
 )
 async def fetch_md5(
-    platform: str,
-    package_name: str,
-    package_version: str,
-    package_build: str,
-    file_extension: str,
+    platform: str = Path(pattern=PLATFORM_REGEX),
+    package_name: str = Path(pattern=PACKAGE_NAME_REGEX),
+    package_version: str = Path(pattern=PACKAGE_VERSION_REGEX),
+    package_build: str = Path(pattern=PACKAGE_BUILD_REGEX),
+    file_extension: str = Path(pattern=FILE_EXTENSION_REGEX),
 ):
-    validate_platform(platform)
-    validate_package_name(package_name)
-    validate_package_version(package_version)
-    validate_package_build(package_build)
-    validate_file_extension(file_extension)
-
     file_name = get_package_file_name(
         package_name, package_version, package_build, file_extension
     )
@@ -226,8 +208,7 @@ async def fetch_md5(
 
 
 @app.get("/{platform}/{filename}.json")
-async def fetch_repodata(platform: str, filename: str):
-    validate_platform(platform)
+async def fetch_repodata(filename: str, platform: str = Path(pattern=PLATFORM_REGEX)):
     if not filename in {"repodata", "repodata_from_packages", "patch_instructions"}:
         raise HTTPException(status_code=404, detail="File not found")
 
@@ -246,9 +227,7 @@ async def fetch_repodata(platform: str, filename: str):
 
 
 @app.get("/channeldata.json")
-async def fetch_channeldata(platform: str):
-    validate_platform(platform)
-
+async def fetch_channeldata(platform: str = Path(pattern=PLATFORM_REGEX)):
     # Construct the filepath
     file_path = get_package_file_path(
         get_server_packages_path(), platform, "channeldata.json"
@@ -261,12 +240,3 @@ async def fetch_channeldata(platform: str):
         )
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail="File not found") from e
-
-
-@app.on_event("startup")
-async def startup_event():
-    # Create the packages directory if it doesn't exist
-    os.makedirs(get_server_packages_path(), exist_ok=True)
-
-    # TODO: use `conda index` to generate the index files
-    # https://docs.conda.io/projects/conda-build/en/stable/concepts/generating-index.html
