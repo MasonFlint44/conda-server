@@ -43,6 +43,7 @@ async def lifespan(app: FastAPI):
 
     # TODO: use `conda index` to generate the index files
     # https://docs.conda.io/projects/conda-build/en/stable/concepts/generating-index.html
+    # https://github.com/conda/conda-index
 
     yield
 
@@ -207,6 +208,8 @@ async def fetch_md5(
     return {"md5": md5_hash.hexdigest()}
 
 
+# TODO: are repodata_from_packages or patch_instructions necessary?
+# TODO: do we need to support repodata.json.bz2?
 @app.get("/{platform}/{filename}.json")
 async def fetch_repodata(filename: str, platform: str = Path(pattern=PLATFORM_REGEX)):
     if not filename in {"repodata", "repodata_from_packages", "patch_instructions"}:

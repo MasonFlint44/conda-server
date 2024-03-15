@@ -1,5 +1,14 @@
 {
     "python.defaultInterpreterPath": "~/.conda/envs/${env:ENVIRONMENT_NAME}/bin/python",
+    "pylint.path": [
+        "~/.conda/envs/${env:ENVIRONMENT_NAME}/bin/pylint",
+    ],
+    "black-formatter.path": [
+        "~/.conda/envs/${env:ENVIRONMENT_NAME}/bin/black",
+    ],
+    "isort.path": [
+        "~/.conda/envs/${env:ENVIRONMENT_NAME}/bin/isort",
+    ],
     "python.analysis.typeCheckingMode": "basic",
     "pylint.args": [
         "--disable=missing-module-docstring",
