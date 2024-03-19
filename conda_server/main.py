@@ -1,4 +1,4 @@
-import hashlib
+import asyncio
 import os
 import shutil
 from contextlib import asynccontextmanager
@@ -16,8 +16,12 @@ from .utils import (
     PLATFORM_REGEX,
     get_package_file_name,
     get_package_file_path,
-    get_server_packages_path,
+    get_channel_dir,
+    get_platforms,
 )
+from .hash import md5_in_chunks, sha256_in_chunks
+from fastapi.concurrency import run_in_threadpool
+from concurrent.futures import ProcessPoolExecutor
 
 # TODO: implement package indexing mechanism - use `conda index`
 # TODO: validate uploaded file is a valid conda package
@@ -25,21 +29,25 @@ from .utils import (
 # TODO: add logging
 # TODO: implement rate limiting - should be configurable
 # TODO: add configurable file size limit
-# TODO: configurable timeout (set timeout on filelock)? - might be useful for large uploads
 # TODO: implement search endpoints
 # TODO: abstract away the file system to make it easier to implement other backing stores - look into fuse and alternatives
 # TODO: implement s3 backing store - look into s3fs and alternatives
 # TODO: implement postgres backing store - look into dbfs and alternatives
+# TODO: use file watcher to trigger index generation
 
-
-API_KEY = os.getenv("CONDA_SERVER_API_KEY", "secret")
+API_KEY = os.getenv("CONDA_SERVER_API_KEY", "default")
 API_KEY_NAME = "X-API-Key"
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Create the packages directory if it doesn't exist
-    os.makedirs(get_server_packages_path(), exist_ok=True)
+    # Validate channel directory is not a supported platform
+    assert (
+        os.path.basename(get_channel_dir()) not in get_platforms()
+    ), "$CONDA_CHANNEL_DIR cannot be a supported platform."
+
+    # Create the channel and noarch directories if they don't exist
+    os.makedirs(os.path.join(get_channel_dir(), "noarch"), exist_ok=True)
 
     # TODO: use `conda index` to generate the index files
     # https://docs.conda.io/projects/conda-build/en/stable/concepts/generating-index.html
@@ -48,7 +56,9 @@ async def lifespan(app: FastAPI):
     yield
 
 
+process_pool_executor = ProcessPoolExecutor()
 app = FastAPI(lifespan=lifespan)
+loop = asyncio.get_event_loop()
 
 
 def get_api_key(
@@ -72,7 +82,7 @@ async def fetch_package(
     file_name = get_package_file_name(
         package_name, package_version, package_build, file_extension
     )
-    file_path = get_package_file_path(get_server_packages_path(), platform, file_name)
+    file_path = get_package_file_path(get_channel_dir(), platform, file_name)
     media_type = (
         "application/x-tar"
         if file_extension == "tar.bz2"
@@ -99,17 +109,21 @@ async def upload_package(
     api_key: APIKeyHeader = Depends(get_api_key),
 ):
     # Make sure the directory exists before we start writing files to it
-    os.makedirs(os.path.join(get_server_packages_path(), platform), exist_ok=True)
+    os.makedirs(os.path.join(get_channel_dir(), platform), exist_ok=True)
 
     file_name = get_package_file_name(
         package_name, package_version, package_build, file_extension
     )
-    file_path = get_package_file_path(get_server_packages_path(), platform, file_name)
+    file_path = get_package_file_path(get_channel_dir(), platform, file_name)
 
-    try:
-        # Open a file and write the uploaded content to it chunk by chunk
+    def save_uploaded_file():
+        # Open a file and write the uploaded content to it
         with atomic_write(file_path, mode="wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
+
+    try:
+        await run_in_threadpool(save_uploaded_file)
+        return {"message": "Package uploaded successfully"}
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Error writing to file: {str(e)}"
@@ -117,8 +131,6 @@ async def upload_package(
     finally:
         # Always close the file, even if an error occurs
         file.file.close()
-
-    return {"message": "Package uploaded successfully"}
 
 
 @app.delete(
@@ -135,7 +147,7 @@ async def delete_package(
     file_name = get_package_file_name(
         package_name, package_version, package_build, file_extension
     )
-    file_path = get_package_file_path(get_server_packages_path(), platform, file_name)
+    file_path = get_package_file_path(get_channel_dir(), platform, file_name)
 
     # Check if file exists
     if not os.path.isfile(file_path):
@@ -161,21 +173,18 @@ async def fetch_sha256(
     file_name = get_package_file_name(
         package_name, package_version, package_build, file_extension
     )
-    file_path = get_package_file_path(get_server_packages_path(), platform, file_name)
+    file_path = get_package_file_path(get_channel_dir(), platform, file_name)
 
     # Check if file exists
     if not os.path.isfile(file_path):
         raise HTTPException(status_code=404, detail="File not found")
 
-    # Calculate the SHA-256 hash
-    sha256_hash = hashlib.sha256()
+    # Calculate the SHA256 hash
+    sha256_hash = await loop.run_in_executor(
+        process_pool_executor, sha256_in_chunks, file_path
+    )
 
-    with open(file_path, "rb") as f:
-        # Read and update hash string value in blocks of 4K
-        for byte_block in iter(lambda: f.read(4096), b""):
-            sha256_hash.update(byte_block)
-
-    return {"sha256": sha256_hash.hexdigest()}
+    return {"sha256": sha256_hash}
 
 
 @app.get(
@@ -191,21 +200,18 @@ async def fetch_md5(
     file_name = get_package_file_name(
         package_name, package_version, package_build, file_extension
     )
-    file_path = get_package_file_path(get_server_packages_path(), platform, file_name)
+    file_path = get_package_file_path(get_channel_dir(), platform, file_name)
 
     # Check if file exists
     if not os.path.isfile(file_path):
         raise HTTPException(status_code=404, detail="File not found")
 
     # Calculate the MD5 hash
-    md5_hash = hashlib.md5()
+    md5_hash = await loop.run_in_executor(
+        process_pool_executor, md5_in_chunks, file_path
+    )
 
-    with open(file_path, "rb") as f:
-        # Read and update hash string value in blocks of 4K
-        for byte_block in iter(lambda: f.read(4096), b""):
-            md5_hash.update(byte_block)
-
-    return {"md5": md5_hash.hexdigest()}
+    return {"md5": md5_hash}
 
 
 # TODO: are repodata_from_packages or patch_instructions necessary?
@@ -216,9 +222,7 @@ async def fetch_repodata(filename: str, platform: str = Path(pattern=PLATFORM_RE
         raise HTTPException(status_code=404, detail="File not found")
 
     # Construct the filepath
-    file_path = get_package_file_path(
-        get_server_packages_path(), platform, f"{filename}.json"
-    )
+    file_path = get_package_file_path(get_channel_dir(), platform, f"{filename}.json")
 
     try:
         # Return the file as a response
@@ -232,9 +236,7 @@ async def fetch_repodata(filename: str, platform: str = Path(pattern=PLATFORM_RE
 @app.get("/channeldata.json")
 async def fetch_channeldata(platform: str = Path(pattern=PLATFORM_REGEX)):
     # Construct the filepath
-    file_path = get_package_file_path(
-        get_server_packages_path(), platform, "channeldata.json"
-    )
+    file_path = get_package_file_path(get_channel_dir(), platform, "channeldata.json")
 
     try:
         # Return the file as a response

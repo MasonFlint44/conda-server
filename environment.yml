@@ -1,5 +1,6 @@
 dependencies:
   - python=3.11
+  - conda-index=0.*
   - pip
   - pip:
     - fastapi[all]

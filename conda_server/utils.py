@@ -43,5 +43,6 @@ def get_package_file_path(packages: str, platform: str, file_name: str) -> str:
     return os.path.join(packages, platform, file_name)
 
 
-def get_server_packages_path() -> str:
-    return os.getenv("CONDA_SERVER_PACKAGES_PATH", "packages")
+@functools.lru_cache(maxsize=1)
+def get_channel_dir() -> str:
+    return os.getenv("CONDA_CHANNEL_DIR", "channel")

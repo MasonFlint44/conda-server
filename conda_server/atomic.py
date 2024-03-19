@@ -12,15 +12,13 @@ from ._types import OpenBinaryMode, OpenTextMode
 @overload
 def atomic_write(
     path: str, mode: Literal[OpenTextMode] | None = "w", encoding: str | None = "utf-8"
-) -> ContextManager[TextIO]:
-    ...
+) -> ContextManager[TextIO]: ...
 
 
 @overload
 def atomic_write(
     path: str, mode: Literal[OpenBinaryMode], encoding: str | None = None
-) -> ContextManager[BinaryIO]:
-    ...
+) -> ContextManager[BinaryIO]: ...
 
 
 @contextmanager

@@ -2,7 +2,7 @@
 	"name": "conda-server",
 	"dockerFile": "Dockerfile",
 	"containerEnv": {
-		"ENVIRONMENT_NAME": "conda-server",
+		"ENVIRONMENT_NAME": "conda-server"
 	},
 	"customizations": {
 		"vscode": {
