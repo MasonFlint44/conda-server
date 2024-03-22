@@ -34,6 +34,7 @@ from concurrent.futures import ProcessPoolExecutor
 # TODO: implement s3 backing store - look into s3fs and alternatives
 # TODO: implement postgres backing store - look into dbfs and alternatives
 # TODO: use file watcher to trigger index generation
+# TODO: watch for changes in channel directory using watchfiles and trigger index generation
 
 API_KEY = os.getenv("CONDA_SERVER_API_KEY", "default")
 API_KEY_NAME = "X-API-Key"
@@ -49,11 +50,8 @@ async def lifespan(app: FastAPI):
     # Create the channel and noarch directories if they don't exist
     os.makedirs(os.path.join(get_channel_dir(), "noarch"), exist_ok=True)
 
-    # TODO: use `conda index` to generate the index files
-    # https://docs.conda.io/projects/conda-build/en/stable/concepts/generating-index.html
-    # https://github.com/conda/conda-index
-
-    yield
+    with process_pool_executor:
+        yield
 
 
 process_pool_executor = ProcessPoolExecutor()
