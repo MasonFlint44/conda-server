@@ -8,3 +8,4 @@ dependencies:
     - black
     - pylint
     - isort
+    - watchfiles

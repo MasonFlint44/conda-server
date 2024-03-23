@@ -20,11 +20,12 @@ from .utils import (
     get_platforms,
 )
 from .hash import md5_in_chunks, sha256_in_chunks
+from .index import IndexManager
 from fastapi.concurrency import run_in_threadpool
 from concurrent.futures import ProcessPoolExecutor
 
 # TODO: implement package indexing mechanism - use `conda index`
-# TODO: validate uploaded file is a valid conda package
+# TODO: validate uploaded file is a valid conda package - at least validate platform
 # TODO: implement authentication - should be configurable for both download and upload
 # TODO: add logging
 # TODO: implement rate limiting - should be configurable
@@ -50,14 +51,20 @@ async def lifespan(app: FastAPI):
     # Create the channel and noarch directories if they don't exist
     os.makedirs(os.path.join(get_channel_dir(), "noarch"), exist_ok=True)
 
+    # Start watching the channel directory for changes
+    index_manager.watch_channel_dir()
+
     with process_pool_executor:
         yield
+
+    # Stop watching the channel directory for changes
+    index_manager.stop_watching()
 
 
 process_pool_executor = ProcessPoolExecutor()
 app = FastAPI(lifespan=lifespan)
 loop = asyncio.get_event_loop()
-
+index_manager = IndexManager()
 
 def get_api_key(
     api_key_header: str = Security(APIKeyHeader(name=API_KEY_NAME)),
