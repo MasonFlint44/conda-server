@@ -1,3 +1,4 @@
+# Application dependencies
 dependencies:
   - python=3.11
   - conda-index=0.*
@@ -5,7 +6,4 @@ dependencies:
   - pip:
     - fastapi[all]
     - filelock
-    - black
-    - pylint
-    - isort
     - watchfiles

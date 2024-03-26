@@ -22,13 +22,13 @@ class IndexManager:
     async def generate_index(self) -> None:
         # Only allow two index generations to be pending at the same time:
         # one executing generation and one followup generation waiting to be executed.
-        # 
+        #
         # The lock ensure only one index generation is executing at a time.
         if self._index_generation_semaphore.locked():
             return
 
         async with self._index_generation_semaphore, self._index_generation_lock:
-            await run_in_threadpool(cli.callback, get_channel_dir()) # type: ignore
+            await run_in_threadpool(cli.callback, get_channel_dir())  # type: ignore
 
     def watch_channel_dir(self) -> None:
         if self.is_watching:
@@ -36,7 +36,7 @@ class IndexManager:
         # Start watching the channel directory for changes
         self._watch_task = asyncio.create_task(self._watch_channel_dir())
         self._watch_task.add_done_callback(self._on_watch_done)
-    
+
     def stop_watching(self) -> None:
         if not self.is_watching:
             return
@@ -48,6 +48,6 @@ class IndexManager:
         async for _ in awatch(get_channel_dir(), stop_event=self._stop_watching_event):
             # Generate the index when a change is detected
             await self.generate_index()
-        
+
     def _on_watch_done(self, task: asyncio.Task[None]) -> None:
         self._watch_task = None

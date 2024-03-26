@@ -4,9 +4,9 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "update-environment",
+            "label": "build-environment",
             "type": "shell",
-            "command": "mamba env update -f environment.yml -n ${env:ENVIRONMENT_NAME} && mamba clean --all -y && mamba env export -n ${env:ENVIRONMENT_NAME} > environment.lock.yml",
+            "command": ".scripts/build-environment.sh",
             "problemMatcher": []
         }
     ]

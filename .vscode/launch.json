@@ -5,15 +5,36 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "FastAPI",
-            "type": "python",
+            "name": "Python: FastAPI",
+            "type": "debugpy",
             "request": "launch",
             "module": "uvicorn",
             "args": [
-                "conda_server.main:app", "--reload", "--host", "0.0.0.0", "--port", "8000", "--log-level", "debug",
+                "conda_server.main:app",
+                "--reload",
+                "--host",
+                "0.0.0.0",
+                "--port",
+                "8000",
+                "--log-level",
+                "debug",
             ],
-            "pythonArgs": ["-Xfrozen_modules=off"],
+            "pythonArgs": [
+                "-Xfrozen_modules=off"
+            ],
+            "serverReadyAction": {
+                "action": "openExternally",
+                "pattern": "INFO:\\s+Uvicorn running on (http[s]?://[\\w.]+:\\d+)",
+                "uriFormat": "%s/docs"
+            },
             "justMyCode": false,
-        }
+        },
+        {
+            "name": "Python Debugger: Current File",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal"
+        },
     ]
 }

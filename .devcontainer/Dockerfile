@@ -6,6 +6,8 @@ ARG USERNAME=vscode
 RUN curl -L -O "https://github.com/conda-forge/miniforge/releases/latest/download/Mambaforge-$(uname)-$(uname -m).sh" && \
     bash Mambaforge-$(uname)-$(uname -m).sh -b -p /opt/conda && \
     rm Mambaforge-$(uname)-$(uname -m).sh
+
+RUN /opt/conda/bin/mamba install -y -n base conda-merge
     
 USER $USERNAME
 

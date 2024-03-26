@@ -17,5 +17,5 @@
 			]
 		}
 	},
-	"postCreateCommand": "mamba env create -f environment.yml -n ${containerEnv:ENVIRONMENT_NAME} && mamba env export -n ${containerEnv:ENVIRONMENT_NAME} > environment.lock.yml && echo 'mamba activate ${containerEnv:ENVIRONMENT_NAME}' >> ~/.bashrc"
+	"postCreateCommand": "chmod +x .scripts/*.sh && ./.scripts/update-bashrc.sh && ./.scripts/build-environment.sh"
 }

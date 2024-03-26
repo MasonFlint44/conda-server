@@ -24,7 +24,7 @@ from .index import IndexManager
 from fastapi.concurrency import run_in_threadpool
 from concurrent.futures import ProcessPoolExecutor
 
-# TODO: implement package indexing mechanism - use `conda index`
+# TODO: add tests around uploading and indexing packages
 # TODO: validate uploaded file is a valid conda package - at least validate platform
 # TODO: implement authentication - should be configurable for both download and upload
 # TODO: add logging
@@ -34,8 +34,6 @@ from concurrent.futures import ProcessPoolExecutor
 # TODO: abstract away the file system to make it easier to implement other backing stores - look into fuse and alternatives
 # TODO: implement s3 backing store - look into s3fs and alternatives
 # TODO: implement postgres backing store - look into dbfs and alternatives
-# TODO: use file watcher to trigger index generation
-# TODO: watch for changes in channel directory using watchfiles and trigger index generation
 
 API_KEY = os.getenv("CONDA_SERVER_API_KEY", "default")
 API_KEY_NAME = "X-API-Key"
@@ -65,6 +63,7 @@ process_pool_executor = ProcessPoolExecutor()
 app = FastAPI(lifespan=lifespan)
 loop = asyncio.get_event_loop()
 index_manager = IndexManager()
+
 
 def get_api_key(
     api_key_header: str = Security(APIKeyHeader(name=API_KEY_NAME)),

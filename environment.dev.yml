@@ -1,0 +1,12 @@
+# Dev dependencies
+dependencies:
+  - python=3.11
+  - conda-build
+  - conda-verify
+  - conda-merge
+  - pip
+  - pip:
+    - black
+    - pylint
+    - isort
+    - pytest
