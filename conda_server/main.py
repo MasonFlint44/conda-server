@@ -3,17 +3,12 @@ import os
 import shutil
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, File, HTTPException, Path, Security, UploadFile
+from fastapi import FastAPI, File, HTTPException, Path, Security, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.security.api_key import APIKeyHeader
 
 from .atomic import atomic_write
 from .utils import (
-    FILE_EXTENSION_REGEX,
-    PACKAGE_BUILD_REGEX,
-    PACKAGE_NAME_REGEX,
-    PACKAGE_VERSION_REGEX,
-    PLATFORM_REGEX,
     get_package_file_name,
     get_package_file_path,
     get_channel_dir,
@@ -22,6 +17,7 @@ from .utils import (
 from .hash import md5_in_chunks, sha256_in_chunks
 from .index import IndexManager
 from fastapi.concurrency import run_in_threadpool
+from .validation import validate_package_name, PLATFORM_REGEX
 from concurrent.futures import ProcessPoolExecutor
 
 # TODO: add tests around uploading and indexing packages
@@ -73,16 +69,16 @@ def get_api_key(
     raise HTTPException(status_code=400, detail="API Key was not provided")
 
 
-@app.get(
-    "/{platform}/{package_name}-{package_version}-{package_build}.{file_extension}"
-)
+@app.get("/{platform}/{package_file}")
 async def fetch_package(
+    package_file: str,
     platform: str = Path(pattern=PLATFORM_REGEX),
-    package_name: str = Path(pattern=PACKAGE_NAME_REGEX),
-    package_version: str = Path(pattern=PACKAGE_VERSION_REGEX),
-    package_build: str = Path(pattern=PACKAGE_BUILD_REGEX),
-    file_extension: str = Path(pattern=FILE_EXTENSION_REGEX),
 ):
+    # Validate the package file name
+    package_name, package_version, package_build, file_extension = (
+        validate_package_name(package_file)
+    )
+
     file_name = get_package_file_name(
         package_name, package_version, package_build, file_extension
     )
@@ -100,18 +96,18 @@ async def fetch_package(
         raise HTTPException(status_code=404, detail="File not found") from e
 
 
-@app.put(
-    "/{platform}/{package_name}-{package_version}-{package_build}.{file_extension}"
-)
+@app.put("/{platform}/{package_file}")
 async def upload_package(
+    package_file: str,
     platform: str = Path(pattern=PLATFORM_REGEX),
-    package_name: str = Path(pattern=PACKAGE_NAME_REGEX),
-    package_version: str = Path(pattern=PACKAGE_VERSION_REGEX),
-    package_build: str = Path(pattern=PACKAGE_BUILD_REGEX),
-    file_extension: str = Path(pattern=FILE_EXTENSION_REGEX),
     file: UploadFile = File(...),
-    api_key: APIKeyHeader = Depends(get_api_key),
+    # api_key: APIKeyHeader = Depends(get_api_key),
 ):
+    # Validate the package file name
+    package_name, package_version, package_build, file_extension = (
+        validate_package_name(package_file)
+    )
+
     # Make sure the directory exists before we start writing files to it
     os.makedirs(os.path.join(get_channel_dir(), platform), exist_ok=True)
 
@@ -141,13 +137,15 @@ async def upload_package(
     "/{platform}/{package_name}-{package_version}-{package_build}.{file_extension}"
 )
 async def delete_package(
+    package_file: str,
     platform: str = Path(pattern=PLATFORM_REGEX),
-    package_name: str = Path(pattern=PACKAGE_NAME_REGEX),
-    package_version: str = Path(pattern=PACKAGE_VERSION_REGEX),
-    package_build: str = Path(pattern=PACKAGE_BUILD_REGEX),
-    file_extension: str = Path(pattern=FILE_EXTENSION_REGEX),
-    api_key: APIKeyHeader = Depends(get_api_key),
+    # api_key: APIKeyHeader = Depends(get_api_key),
 ):
+    # Validate the package file name
+    package_name, package_version, package_build, file_extension = (
+        validate_package_name(package_file)
+    )
+
     file_name = get_package_file_name(
         package_name, package_version, package_build, file_extension
     )
@@ -164,16 +162,16 @@ async def delete_package(
     return {"message": "Package deleted successfully"}
 
 
-@app.get(
-    "/{platform}/{package_name}-{package_version}-{package_build}.{file_extension}/hash/sha256"
-)
+@app.get("/{platform}/{package_file}/hash/sha256")
 async def fetch_sha256(
+    package_file: str,
     platform: str = Path(pattern=PLATFORM_REGEX),
-    package_name: str = Path(pattern=PACKAGE_NAME_REGEX),
-    package_version: str = Path(pattern=PACKAGE_VERSION_REGEX),
-    package_build: str = Path(pattern=PACKAGE_BUILD_REGEX),
-    file_extension: str = Path(pattern=FILE_EXTENSION_REGEX),
 ):
+    # Validate the package file name
+    package_name, package_version, package_build, file_extension = (
+        validate_package_name(package_file)
+    )
+
     file_name = get_package_file_name(
         package_name, package_version, package_build, file_extension
     )
@@ -191,16 +189,16 @@ async def fetch_sha256(
     return {"sha256": sha256_hash}
 
 
-@app.get(
-    "/{platform}/{package_name}-{package_version}-{package_build}.{file_extension}/hash/md5"
-)
+@app.get("/{platform}/{package_file}/hash/md5")
 async def fetch_md5(
+    package_file: str,
     platform: str = Path(pattern=PLATFORM_REGEX),
-    package_name: str = Path(pattern=PACKAGE_NAME_REGEX),
-    package_version: str = Path(pattern=PACKAGE_VERSION_REGEX),
-    package_build: str = Path(pattern=PACKAGE_BUILD_REGEX),
-    file_extension: str = Path(pattern=FILE_EXTENSION_REGEX),
 ):
+    # Validate the package file name
+    package_name, package_version, package_build, file_extension = (
+        validate_package_name(package_file)
+    )
+
     file_name = get_package_file_name(
         package_name, package_version, package_build, file_extension
     )

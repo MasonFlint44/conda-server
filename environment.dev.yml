@@ -6,6 +6,7 @@ dependencies:
   - conda-merge
   - pip
   - pip:
+    - asgi-lifespan
     - black
     - pylint
     - isort
