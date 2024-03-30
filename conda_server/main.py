@@ -20,6 +20,8 @@ from fastapi.concurrency import run_in_threadpool
 from .validation import validate_package_name, PLATFORM_REGEX
 from concurrent.futures import ProcessPoolExecutor
 
+# TODO: fix infinite loop in indexing - index modifies the channel directory, which triggers a new index
+# TODO: add endpoint to index packages
 # TODO: add tests around uploading and indexing packages
 # TODO: validate uploaded file is a valid conda package - at least validate platform
 # TODO: implement authentication - should be configurable for both download and upload
@@ -96,6 +98,7 @@ async def fetch_package(
         raise HTTPException(status_code=404, detail="File not found") from e
 
 
+# TODO: update to clean up lock files after upload (or maybe on startup or shutdown?)
 @app.put("/{platform}/{package_file}")
 async def upload_package(
     package_file: str,
@@ -133,9 +136,7 @@ async def upload_package(
         file.file.close()
 
 
-@app.delete(
-    "/{platform}/{package_name}-{package_version}-{package_build}.{file_extension}"
-)
+@app.delete("/{platform}/{package_file}")
 async def delete_package(
     package_file: str,
     platform: str = Path(pattern=PLATFORM_REGEX),

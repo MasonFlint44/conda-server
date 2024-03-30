@@ -4,8 +4,16 @@ import pytest
 import glob
 import shutil
 from pathlib import Path
+import os
 from os.path import basename
 from .build_package import build_fake_package
+
+
+@pytest.fixture(scope="session")
+def channel_dir() -> Path:
+    if channel_dir := os.getenv("CONDA_CHANNEL_DIR"):
+        return Path(channel_dir)
+    return Path.home() / ".conda-server" / "channel"
 
 
 @pytest.fixture(autouse=True, scope="session")
