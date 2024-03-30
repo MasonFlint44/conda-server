@@ -1,4 +1,4 @@
-# Dev dependencies
+# Dependencies for development environment
 dependencies:
   - python=3.11
   - conda-build

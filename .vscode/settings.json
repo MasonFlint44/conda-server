@@ -1,17 +1,8 @@
 {
-    "python.defaultInterpreterPath": "~/.conda/envs/${env:ENVIRONMENT_NAME}-dev/bin/python",
-    "python.testing.pytestPath": "~/.conda/envs/${env:ENVIRONMENT_NAME}-dev/bin/pytest",
     "python.testing.pytestArgs": [
         "tests"
     ],
-    "pylint.path": [
-        "~/.conda/envs/${env:ENVIRONMENT_NAME}-dev/bin/pylint",
-    ],
-    "black-formatter.path": [
-        "~/.conda/envs/${env:ENVIRONMENT_NAME}-dev/bin/black",
-    ],
-    "isort.path": [
-        "~/.conda/envs/${env:ENVIRONMENT_NAME}-dev/bin/isort"],
+    "isort.args":["--profile", "black"],
     "python.analysis.typeCheckingMode": "basic",
     "pylint.args": [
         "--disable=missing-module-docstring",

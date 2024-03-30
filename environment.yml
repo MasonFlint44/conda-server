@@ -1,4 +1,4 @@
-# Application dependencies
+# Dependencies for frozen environment
 dependencies:
   - python=3.11
   - conda-index=0.*
