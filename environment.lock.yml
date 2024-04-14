@@ -5,7 +5,7 @@ dependencies:
   - _libgcc_mutex=0.1=conda_forge
   - _openmp_mutex=4.5=2_gnu
   - archspec=0.2.3=pyhd8ed1ab_0
-  - boltons=23.1.1=pyhd8ed1ab_0
+  - boltons=24.0.0=pyhd8ed1ab_0
   - brotli-python=1.1.0=py311hb755f60_1
   - bzip2=1.0.8=hd590300_5
   - c-ares=1.28.1=hd590300_0
@@ -21,7 +21,7 @@ dependencies:
   - conda-package-handling=2.2.0=pyh38be061_0
   - conda-package-streaming=0.9.0=pyhd8ed1ab_0
   - distro=1.9.0=pyhd8ed1ab_0
-  - filelock=3.13.3=pyhd8ed1ab_0
+  - filelock=3.13.4=pyhd8ed1ab_0
   - fmt=10.2.1=h00ab1b0_0
   - icu=73.2=h59595ed_0
   - idna=3.6=pyhd8ed1ab_0
@@ -93,22 +93,22 @@ dependencies:
       - anyio==4.3.0
       - dnspython==2.6.1
       - email-validator==2.1.1
-      - fastapi==0.110.0
+      - fastapi==0.110.1
       - h11==0.14.0
       - httpcore==1.0.5
       - httptools==0.6.1
       - httpx==0.27.0
       - itsdangerous==2.1.2
       - orjson==3.10.0
-      - pydantic==2.6.4
-      - pydantic-core==2.16.3
+      - pydantic==2.7.0
+      - pydantic-core==2.18.1
       - pydantic-extra-types==2.6.0
       - pydantic-settings==2.2.1
       - python-dotenv==1.0.1
       - python-multipart==0.0.9
       - sniffio==1.3.1
-      - starlette==0.36.3
-      - typing-extensions==4.10.0
+      - starlette==0.37.2
+      - typing-extensions==4.11.0
       - ujson==5.9.0
       - uvicorn==0.29.0
       - uvloop==0.19.0

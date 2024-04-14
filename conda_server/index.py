@@ -1,8 +1,9 @@
 import asyncio
-from fastapi.concurrency import run_in_threadpool
-from watchfiles import awatch
+import re
 
 from conda_index.cli import cli
+from fastapi.concurrency import run_in_threadpool
+from watchfiles import Change, DefaultFilter, awatch
 
 from .utils import get_channel_dir
 
@@ -45,9 +46,39 @@ class IndexManager:
 
     async def _watch_channel_dir(self) -> None:
         # Watch the channel directory for changes
-        async for _ in awatch(get_channel_dir(), stop_event=self._stop_watching_event):
+        async for _ in awatch(
+            get_channel_dir(),
+            stop_event=self._stop_watching_event,
+            watch_filter=IndexFilter(),
+        ):
             # Generate the index when a change is detected
             await self.generate_index()
 
     def _on_watch_done(self, task: asyncio.Task[None]) -> None:
         self._watch_task = None
+
+
+class IndexFilter(DefaultFilter):
+    generated_files = {
+        "repodata.json",
+        "repodata.json.bz2",
+        "repodata.json.zst",
+        "repodata_from_packages.json",
+        "index.html",
+        "current_repodata.json",
+        "rss.xml",
+        "run_exports.json",
+        "current_index.json",  # TODO: does --current-index-versions-file create this file?
+        "channeldata.json",
+        "patch_instructions.json",  # TODO: does --patch-generator create this file?
+    }
+    uuid_pattern = r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+    pattern = re.compile(rf".*\/({'|'.join(generated_files)})(\.{uuid_pattern})?")
+    cache_dir = ".cache"
+
+    def __call__(self, change: Change, path: str) -> bool:
+        return (
+            super().__call__(change, path)
+            and not bool(self.pattern.match(path))
+            and self.cache_dir not in path
+        )

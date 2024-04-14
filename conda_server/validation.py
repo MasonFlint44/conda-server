@@ -24,6 +24,5 @@ def validate_package_name(filename: str) -> tuple[str, str, str, str]:
         or not FILE_EXTENSION_REGEX.match(file_extension)
     ):
         raise HTTPException(status_code=400, detail="Invalid package file name format")
-    
+
     return package_name, package_version, package_build, file_extension
-    
