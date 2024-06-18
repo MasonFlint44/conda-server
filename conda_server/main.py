@@ -1,27 +1,26 @@
 import asyncio
 import os
 import shutil
+from concurrent.futures import ProcessPoolExecutor
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, File, HTTPException, Path, Security, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse
 from fastapi.security.api_key import APIKeyHeader
+from prometheus_fastapi_instrumentator import Instrumentator
 
 from .atomic import atomic_write
-from .utils import (
-    get_package_file_name,
-    get_package_file_path,
-    get_channel_dir,
-    get_platforms,
-)
 from .hash import md5_in_chunks, sha256_in_chunks
 from .index import IndexManager
-from fastapi.concurrency import run_in_threadpool
-from .validation import validate_package_name, PLATFORM_REGEX
-from concurrent.futures import ProcessPoolExecutor
+from .utils import (
+    get_channel_dir,
+    get_package_file_name,
+    get_package_file_path,
+    get_platforms,
+)
+from .validation import PLATFORM_REGEX, validate_package_name
 
-# TODO: fix infinite loop in indexing - index modifies the channel directory, which triggers a new index
-# TODO: add endpoint to index packages
 # TODO: add tests around uploading and indexing packages
 # TODO: validate uploaded file is a valid conda package - at least validate platform
 # TODO: implement authentication - should be configurable for both download and upload
@@ -47,6 +46,9 @@ async def lifespan(app: FastAPI):
     # Create the channel and noarch directories if they don't exist
     os.makedirs(os.path.join(get_channel_dir(), "noarch"), exist_ok=True)
 
+    # Expose prometheus metrics endpoint
+    instrumentator.expose(app)
+
     # Start watching the channel directory for changes
     index_manager.watch_channel_dir()
 
@@ -58,9 +60,12 @@ async def lifespan(app: FastAPI):
 
 
 process_pool_executor = ProcessPoolExecutor()
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(
+    lifespan=lifespan,  # type: ignore
+)
 loop = asyncio.get_event_loop()
 index_manager = IndexManager()
+instrumentator = Instrumentator().instrument(app)
 
 
 def get_api_key(
@@ -69,6 +74,14 @@ def get_api_key(
     if api_key_header == API_KEY:
         return api_key_header
     raise HTTPException(status_code=400, detail="API Key was not provided")
+
+
+@app.post("/build-index")
+async def build_index(
+    # api_key: APIKeyHeader = Depends(get_api_key),
+):
+    await index_manager.generate_index()
+    return {"message": "Index built successfully"}
 
 
 @app.get("/{platform}/{package_file}")
@@ -98,7 +111,6 @@ async def fetch_package(
         raise HTTPException(status_code=404, detail="File not found") from e
 
 
-# TODO: update to clean up lock files after upload (or maybe on startup or shutdown?)
 @app.put("/{platform}/{package_file}")
 async def upload_package(
     package_file: str,
@@ -217,11 +229,14 @@ async def fetch_md5(
     return {"md5": md5_hash}
 
 
-# TODO: are repodata_from_packages or patch_instructions necessary?
-# TODO: do we need to support repodata.json.bz2?
 @app.get("/{platform}/{filename}.json")
 async def fetch_repodata(filename: str, platform: str = Path(pattern=PLATFORM_REGEX)):
-    if not filename in {"repodata", "repodata_from_packages", "patch_instructions"}:
+    if not filename in {
+        "current_repodata",
+        "repodata",
+        "repodata_from_packages",
+        "patch_instructions",
+    }:
         raise HTTPException(status_code=404, detail="File not found")
 
     # Construct the filepath

@@ -1,8 +1,9 @@
-from pathlib import Path
-from os.path import basename
-from httpx import AsyncClient
 import glob
 import shutil
+from os.path import basename
+from pathlib import Path
+
+from httpx import AsyncClient
 
 
 async def test_upload(testpkg: Path, async_client: AsyncClient, channel_dir: Path):

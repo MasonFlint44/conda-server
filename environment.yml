@@ -7,3 +7,4 @@ dependencies:
     - fastapi[all]
     - filelock
     - watchfiles
+    - prometheus-fastapi-instrumentator
