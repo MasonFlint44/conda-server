@@ -1,6 +1,6 @@
 {
     "python.testing.pytestArgs": [
-        "tests"
+        "tests", "-o", "log_cli=true"
     ],
     "isort.args":["--profile", "black"],
     "python.analysis.typeCheckingMode": "basic",

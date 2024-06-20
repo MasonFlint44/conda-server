@@ -1,7 +1,6 @@
 import asyncio
 import os
 import shutil
-from concurrent.futures import ProcessPoolExecutor
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, File, HTTPException, Path, Security, UploadFile
@@ -50,16 +49,10 @@ async def lifespan(app: FastAPI):
     instrumentator.expose(app)
 
     # Start watching the channel directory for changes
-    index_manager.watch_channel_dir()
-
-    with process_pool_executor:
+    with index_manager:
         yield
 
-    # Stop watching the channel directory for changes
-    index_manager.stop_watching()
 
-
-process_pool_executor = ProcessPoolExecutor()
 app = FastAPI(
     lifespan=lifespan,  # type: ignore
 )
@@ -195,9 +188,7 @@ async def fetch_sha256(
         raise HTTPException(status_code=404, detail="File not found")
 
     # Calculate the SHA256 hash
-    sha256_hash = await loop.run_in_executor(
-        process_pool_executor, sha256_in_chunks, file_path
-    )
+    sha256_hash = sha256_in_chunks(file_path)
 
     return {"sha256": sha256_hash}
 
@@ -222,9 +213,7 @@ async def fetch_md5(
         raise HTTPException(status_code=404, detail="File not found")
 
     # Calculate the MD5 hash
-    md5_hash = await loop.run_in_executor(
-        process_pool_executor, md5_in_chunks, file_path
-    )
+    md5_hash = md5_in_chunks(file_path)
 
     return {"md5": md5_hash}
 

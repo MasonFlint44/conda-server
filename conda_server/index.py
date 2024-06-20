@@ -3,6 +3,7 @@ import re
 
 from conda_index.cli import cli
 from fastapi.concurrency import run_in_threadpool
+from filelock import FileLock
 from watchfiles import Change, DefaultFilter, awatch
 
 from .utils import get_channel_dir
@@ -11,8 +12,8 @@ from .utils import get_channel_dir
 # See https://github.com/conda/conda-index
 class IndexManager:
     def __init__(self) -> None:
-        self._index_generation_semaphore = asyncio.BoundedSemaphore(2)
-        self._index_generation_lock = asyncio.Lock()
+        self._pending_index_generation_lock = FileLock(".pending_index_generation_lock")
+        self._index_generation_lock = FileLock(".index_generation_lock")
         self._watch_task: asyncio.Task[None] | None = None
         self._stop_watching_event = asyncio.Event()
 
@@ -21,15 +22,19 @@ class IndexManager:
         return self._watch_task is not None
 
     async def generate_index(self) -> None:
-        # Only allow two index generations to be pending at the same time:
-        # one executing generation and one followup generation waiting to be executed.
-        #
-        # The lock ensure only one index generation is executing at a time.
-        if self._index_generation_semaphore.locked():
+        # Only allow one executing generation and one follow-up pending generation to
+        # be executing at the same time.
+        if self._pending_index_generation_lock.is_locked:
             return
 
-        async with self._index_generation_semaphore, self._index_generation_lock:
+        if self._index_generation_lock.is_locked:
+            self._pending_index_generation_lock.acquire()
+
+        with self._index_generation_lock:
             await run_in_threadpool(cli.callback, get_channel_dir())  # type: ignore
+
+        if self._pending_index_generation_lock.is_locked:
+            self._pending_index_generation_lock.release()
 
     def watch_channel_dir(self) -> None:
         if self.is_watching:
@@ -56,6 +61,13 @@ class IndexManager:
 
     def _on_watch_done(self, task: asyncio.Task[None]) -> None:
         self._watch_task = None
+
+    def __enter__(self) -> "IndexManager":
+        self.watch_channel_dir()
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
+        self.stop_watching()
 
 
 class IndexFilter(DefaultFilter):
