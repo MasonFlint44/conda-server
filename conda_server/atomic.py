@@ -1,7 +1,8 @@
 import os
 import shutil
 import tempfile
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
+from pathlib import Path
 from typing import BinaryIO, ContextManager, Literal, TextIO, overload
 
 from filelock import FileLock
@@ -22,7 +23,7 @@ def atomic_write(
 
 
 @contextmanager
-def atomic_write(path, mode="w", encoding=None):
+def atomic_write(path: str, mode="w", encoding=None):
     """
     Atomically write a file.
     Protects against partial reads and writes, and ensures that the file
@@ -34,19 +35,19 @@ def atomic_write(path, mode="w", encoding=None):
     if mode in {"r", "rb"}:
         raise ValueError("File mode 'r' not allowed. Must be writable.")
 
-    # Acquire a lock to prevent concurrent writes to the same file
-    with FileLock(f"{path}.lock"):
-        # Create a temporary file in the same directory as the target file
-        temp_file = tempfile.NamedTemporaryFile(
-            mode,
-            encoding=encoding,
-            suffix=".tmp",
-            dir=os.path.dirname(path),
-            delete=False,
-        )
-        temp_path = temp_file.name
+    try:
+        # Acquire a lock to prevent concurrent writes to the same file
+        with FileLock(f"{path}.lock") as file_lock:
+            # Create a temporary file in the same directory as the target file
+            temp_file = tempfile.NamedTemporaryFile(
+                mode,
+                encoding=encoding,
+                suffix=".tmp",
+                dir=os.path.dirname(path),
+                delete=False,
+            )
+            temp_path = temp_file.name
 
-        try:
             # If the file already exists, preserve its content by copying it to the temporary file.
             # If the file is opened in write mode, the file is truncated and there is no need to
             # copy the content.
@@ -71,10 +72,33 @@ def atomic_write(path, mode="w", encoding=None):
 
             # Atomically replace the target file with the temporary file
             os.replace(temp_path, path)
-        finally:
-            # Cleanup: close and remove the temporary file
-            temp_file.close()
-            try:
-                os.remove(temp_path)
-            except FileNotFoundError:
-                pass
+    finally:
+        # Close and remove the temporary file and lock file
+        temp_file.close()
+        safely_remove_lock_file(f"{path}.lock")
+        try:
+            os.remove(temp_path)
+        except FileNotFoundError:
+            pass
+
+
+def safely_remove_lock_file(lock_file_path: str):
+    lock_file = Path(lock_file_path)
+
+    # Ensure the lock file exists before attempting to stat it
+    if not lock_file.exists():
+        return
+
+    # Open the lock file and get its inode
+    with open(lock_file_path, "rb") as fd:
+        st0 = os.fstat(fd.fileno())
+
+    # Check inode consistency
+    st1 = lock_file.stat()
+    if st0.st_ino != st1.st_ino:
+        # Inode mismatch. File will not be removed.
+        return
+
+    # Inode matches, safe to remove the file
+    with suppress(FileNotFoundError):
+        lock_file.unlink()
