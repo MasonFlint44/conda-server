@@ -12,8 +12,8 @@ from .utils import get_channel_dir
 # See https://github.com/conda/conda-index
 class IndexManager:
     def __init__(self) -> None:
-        self._pending_index_generation_lock = FileLock(".pending_index_generation_lock")
-        self._index_generation_lock = FileLock(".index_generation_lock")
+        self._pending_index_generation_lock = FileLock(".pending_index_generation.lock")
+        self._index_generation_lock = FileLock(".index_generation.lock")
         self._watch_task: asyncio.Task[None] | None = None
         self._stop_watching_event = asyncio.Event()
 

@@ -1,7 +1,7 @@
 import asyncio
 import os
 import shutil
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI, File, HTTPException, Path, Security, UploadFile
 from fastapi.concurrency import run_in_threadpool
@@ -163,7 +163,8 @@ async def delete_package(
 
     # Remove the file
     os.remove(file_path)
-    os.remove(f"{file_path}.lock")
+    with suppress(FileNotFoundError):
+        os.remove(f"{file_path}.lock")
 
     return {"message": "Package deleted successfully"}
 
