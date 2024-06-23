@@ -6,14 +6,19 @@ from fastapi.concurrency import run_in_threadpool
 from filelock import FileLock
 from watchfiles import Change, DefaultFilter, awatch
 
+from .atomic import safely_remove_lock_file
 from .utils import get_channel_dir
 
 
 # See https://github.com/conda/conda-index
 class IndexManager:
     def __init__(self) -> None:
-        self._pending_index_generation_lock = FileLock(".pending_index_generation.lock")
-        self._index_generation_lock = FileLock(".index_generation.lock")
+        self._pending_index_generation_lock = FileLock(
+            f"{get_channel_dir()}/.pending_index_generation.lock"
+        )
+        self._index_generation_lock = FileLock(
+            f"{get_channel_dir()}/.index_generation.lock"
+        )
         self._watch_task: asyncio.Task[None] | None = None
         self._stop_watching_event = asyncio.Event()
 
@@ -27,14 +32,23 @@ class IndexManager:
         if self._pending_index_generation_lock.is_locked:
             return
 
-        if self._index_generation_lock.is_locked:
-            self._pending_index_generation_lock.acquire()
+        try:
+            if self._index_generation_lock.is_locked:
+                self._pending_index_generation_lock.acquire()
 
-        with self._index_generation_lock:
-            await run_in_threadpool(cli.callback, get_channel_dir())  # type: ignore
+            try:
+                with self._index_generation_lock:
+                    await run_in_threadpool(cli.callback, get_channel_dir())  # type: ignore
+            finally:
+                safely_remove_lock_file(f"{get_channel_dir()}/.index_generation.lock")
 
-        if self._pending_index_generation_lock.is_locked:
-            self._pending_index_generation_lock.release()
+            if self._pending_index_generation_lock.is_locked:
+                self._pending_index_generation_lock.release()
+        finally:
+            if self._pending_index_generation_lock.is_locked:
+                safely_remove_lock_file(
+                    f"{get_channel_dir()}/.pending_index_generation.lock"
+                )
 
     def watch_channel_dir(self) -> None:
         if self.is_watching:
