@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 import shutil
 from contextlib import asynccontextmanager, suppress
@@ -12,13 +13,12 @@ from prometheus_fastapi_instrumentator import Instrumentator
 from .atomic import atomic_write
 from .hash import md5_in_chunks, sha256_in_chunks
 from .index import IndexManager
-from .utils import get_channel_dir, get_package_file_name, get_platforms
+from .utils import get_channel_dir, get_platforms
 from .validation import PLATFORM_REGEX, validate_package_name
 
 # TODO: add custom metrics for package downloads
 # TODO: validate uploaded file is a valid conda package - at least validate platform
 # TODO: implement authentication - should be configurable for both download and upload
-# TODO: add logging
 
 # TODO: implement rate limiting - should be configurable
 # TODO: add configurable file size limit
@@ -28,10 +28,14 @@ from .validation import PLATFORM_REGEX, validate_package_name
 # TODO: implement sqlite backing store
 # TODO: implement postgres backing store
 
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
+
 API_KEY = os.getenv("CONDA_SERVER_API_KEY", "default")
 API_KEY_NAME = "X-API-Key"
 
 
+# TODO: clean up lock files and tmp files on startup
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Validate channel directory is not a supported platform
@@ -40,7 +44,9 @@ async def lifespan(app: FastAPI):
     ), "$CONDA_CHANNEL_DIR cannot be a supported platform."
 
     # Create the channel and noarch directories if they don't exist
+    logger.info("Channel directory: %s", get_channel_dir())
     os.makedirs(os.path.join(get_channel_dir(), "noarch"), exist_ok=True)
+    logger.info("Ensured noarch directory exists in channel directory")
 
     # Expose prometheus metrics endpoint
     instrumentator.expose(app)
@@ -80,14 +86,8 @@ async def fetch_package(
     platform: str = Path(pattern=PLATFORM_REGEX),
 ):
     # Validate the package file name
-    package_name, package_version, package_build, file_extension = (
-        validate_package_name(package_file)
-    )
-
-    file_name = get_package_file_name(
-        package_name, package_version, package_build, file_extension
-    )
-    file_path = os.path.join(get_channel_dir(), platform, file_name)
+    _, _, _, file_extension = validate_package_name(package_file)
+    file_path = os.path.join(get_channel_dir(), platform, package_file)
     media_type = (
         "application/x-tar"
         if file_extension == "tar.bz2"
@@ -96,7 +96,9 @@ async def fetch_package(
 
     try:
         # Return the file as a response
-        return FileResponse(path=file_path, media_type=media_type, filename=file_name)
+        return FileResponse(
+            path=file_path, media_type=media_type, filename=package_file
+        )
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail="File not found") from e
 
@@ -109,17 +111,11 @@ async def upload_package(
     # api_key: APIKeyHeader = Depends(get_api_key),
 ):
     # Validate the package file name
-    package_name, package_version, package_build, file_extension = (
-        validate_package_name(package_file)
-    )
+    validate_package_name(package_file)
+    file_path = os.path.join(get_channel_dir(), platform, package_file)
 
     # Make sure the directory exists before we start writing files to it
     os.makedirs(os.path.join(get_channel_dir(), platform), exist_ok=True)
-
-    file_name = get_package_file_name(
-        package_name, package_version, package_build, file_extension
-    )
-    file_path = os.path.join(get_channel_dir(), platform, file_name)
 
     def save_uploaded_file():
         # Open a file and write the uploaded content to it
@@ -145,14 +141,8 @@ async def delete_package(
     # api_key: APIKeyHeader = Depends(get_api_key),
 ):
     # Validate the package file name
-    package_name, package_version, package_build, file_extension = (
-        validate_package_name(package_file)
-    )
-
-    file_name = get_package_file_name(
-        package_name, package_version, package_build, file_extension
-    )
-    file_path = os.path.join(get_channel_dir(), platform, file_name)
+    validate_package_name(package_file)
+    file_path = os.path.join(get_channel_dir(), platform, package_file)
 
     # Check if file exists
     if not os.path.isfile(file_path):
@@ -172,20 +162,15 @@ async def fetch_sha256(
     platform: str = Path(pattern=PLATFORM_REGEX),
 ):
     # Validate the package file name
-    package_name, package_version, package_build, file_extension = (
-        validate_package_name(package_file)
-    )
-
-    file_name = get_package_file_name(
-        package_name, package_version, package_build, file_extension
-    )
-    file_path = os.path.join(get_channel_dir(), platform, file_name)
+    validate_package_name(package_file)
+    file_path = os.path.join(get_channel_dir(), platform, package_file)
 
     # Check if file exists
     if not os.path.isfile(file_path):
         raise HTTPException(status_code=404, detail="File not found")
 
     # Calculate the SHA256 hash
+    logger.info("Calculating SHA256 hash for %s", file_path)
     sha256_hash = sha256_in_chunks(file_path)
 
     return {"sha256": sha256_hash}
@@ -197,20 +182,15 @@ async def fetch_md5(
     platform: str = Path(pattern=PLATFORM_REGEX),
 ):
     # Validate the package file name
-    package_name, package_version, package_build, file_extension = (
-        validate_package_name(package_file)
-    )
-
-    file_name = get_package_file_name(
-        package_name, package_version, package_build, file_extension
-    )
-    file_path = os.path.join(get_channel_dir(), platform, file_name)
+    validate_package_name(package_file)
+    file_path = os.path.join(get_channel_dir(), platform, package_file)
 
     # Check if file exists
     if not os.path.isfile(file_path):
         raise HTTPException(status_code=404, detail="File not found")
 
     # Calculate the MD5 hash
+    logger.info("Calculating MD5 hash for %s", file_path)
     md5_hash = md5_in_chunks(file_path)
 
     return {"md5": md5_hash}
@@ -248,7 +228,10 @@ async def fetch_repodata(filename: str, platform: str = Path(pattern=PLATFORM_RE
 
 @app.get("/{filename}")
 async def fetch_channeldata(filename: str):
-    if not filename in {"channeldata.json" "rss.xml"}:
+    if not filename in {
+        "channeldata.json",
+        "rss.xml",
+    }:
         raise HTTPException(status_code=404, detail="File not found")
 
     # Construct the filepath

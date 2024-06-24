@@ -24,13 +24,6 @@ def get_platforms() -> set[str]:
     }
 
 
-@functools.lru_cache
-def get_package_file_name(
-    package_name: str, package_version: str, package_build: str, file_extension: str
-) -> str:
-    return f"{package_name}-{package_version}-{package_build}.{file_extension}"
-
-
 @functools.lru_cache(maxsize=1)
 def get_channel_dir() -> str:
     return os.getenv(

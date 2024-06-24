@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import re
 
 from conda_index.cli import cli
@@ -8,6 +9,8 @@ from watchfiles import Change, DefaultFilter, awatch
 
 from .atomic import safely_remove_lock_file
 from .utils import get_channel_dir
+
+logger = logging.getLogger(__name__)
 
 
 # See https://github.com/conda/conda-index
@@ -32,14 +35,21 @@ class IndexManager:
         # Only allow one executing generation and one follow-up pending generation to
         # be executing at the same time.
         if self._pending_index_generation_lock.is_locked:
+            logger.info(
+                "Canceling index generation. There is already a pending index generation."
+            )
             return
 
         try:
             if self._index_generation_lock.is_locked:
+                logger.info(
+                    "An index generation is already in progress. Scheduling a pending index generation."
+                )
                 self._pending_index_generation_lock.acquire()
 
             try:
                 with self._index_generation_lock:
+                    logger.info("Generating index.")
                     await run_in_threadpool(
                         cli.callback,  # type: ignore
                         get_channel_dir(),  # type: ignore
@@ -61,8 +71,10 @@ class IndexManager:
 
     def watch_channel_dir(self) -> None:
         if self.is_watching:
+            logger.info("Already watching the channel directory.")
             return
         # Start watching the channel directory for changes
+        logger.info("Watching the channel directory for changes.")
         self._watch_task = asyncio.create_task(self._watch_channel_dir())
         self._watch_task.add_done_callback(self._on_watch_done)
 
@@ -70,6 +82,7 @@ class IndexManager:
         if not self.is_watching:
             return
         self._stop_watching_event.set()
+        logger.info("Stopped watching the channel directory.")
         self._stop_watching_event.clear()
 
     async def _watch_channel_dir(self) -> None:
