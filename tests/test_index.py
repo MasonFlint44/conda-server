@@ -14,9 +14,15 @@ async def test_generate_index(channel_dir: Path):
     for platform in get_platforms():
         if Path(channel_dir, platform).exists():
             with suppress(FileNotFoundError):
-                Path(channel_dir, platform, "repodata_from_packages.json").unlink()
-                Path(channel_dir, platform, "repodata.json").unlink()
                 Path(channel_dir, platform, "current_repodata.json").unlink()
+                Path(channel_dir, platform, "current_repodata.json.bz2").unlink()
+                Path(channel_dir, platform, "current_repodata.json.zst").unlink()
+                Path(channel_dir, platform, "repodata_from_packages.json").unlink()
+                Path(channel_dir, platform, "repodata_from_packages.json.bz2").unlink()
+                Path(channel_dir, platform, "repodata_from_packages.json.zst").unlink()
+                Path(channel_dir, platform, "repodata.json").unlink()
+                Path(channel_dir, platform, "repodata.json.bz2").unlink()
+                Path(channel_dir, platform, "repodata.json.zst").unlink()
                 Path(channel_dir, platform, "index.html").unlink()
                 cache_dbs = glob.glob(
                     f"{platform}/.cache/**", root_dir=channel_dir, recursive=True
@@ -54,9 +60,15 @@ async def test_generate_index(channel_dir: Path):
     assert files_modified_within_delta(
         Path(channel_dir, "noarch"),
         [
-            "repodata_from_packages.json",
-            "repodata.json",
             "current_repodata.json",
+            "current_repodata.json.bz2",
+            "current_repodata.json.zst",
+            "repodata_from_packages.json",
+            "repodata_from_packages.json.bz2",
+            "repodata_from_packages.json.zst",
+            "repodata.json",
+            "repodata.json.bz2",
+            "repodata.json.zst",
             "index.html",
             ".cache/cache.db",
         ],
@@ -73,9 +85,15 @@ async def test_generate_index(channel_dir: Path):
         assert files_modified_within_delta(
             Path(channel_dir, platform),
             [
-                "repodata_from_packages.json",
-                "repodata.json",
                 "current_repodata.json",
+                "current_repodata.json.bz2",
+                "current_repodata.json.zst",
+                "repodata_from_packages.json",
+                "repodata_from_packages.json.bz2",
+                "repodata_from_packages.json.zst",
+                "repodata.json",
+                "repodata.json.bz2",
+                "repodata.json.zst",
                 "index.html",
                 ".cache/cache.db",
             ],

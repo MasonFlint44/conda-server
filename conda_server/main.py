@@ -20,16 +20,19 @@ from .utils import (
 )
 from .validation import PLATFORM_REGEX, validate_package_name
 
-# TODO: add tests around uploading and indexing packages
+# TODO: add custom metrics for package downloads
+# TODO: support rss feed
 # TODO: validate uploaded file is a valid conda package - at least validate platform
 # TODO: implement authentication - should be configurable for both download and upload
 # TODO: add logging
+
 # TODO: implement rate limiting - should be configurable
 # TODO: add configurable file size limit
 # TODO: implement search endpoints
 # TODO: abstract away the file system to make it easier to implement other backing stores - look into fuse and alternatives
-# TODO: implement s3 backing store - look into s3fs and alternatives
-# TODO: implement postgres backing store - look into dbfs and alternatives
+# TODO: implement s3 backing store
+# TODO: implement sqlite backing store
+# TODO: implement postgres backing store
 
 API_KEY = os.getenv("CONDA_SERVER_API_KEY", "default")
 API_KEY_NAME = "X-API-Key"
@@ -219,23 +222,31 @@ async def fetch_md5(
     return {"md5": md5_hash}
 
 
-@app.get("/{platform}/{filename}.json")
+@app.get("/{platform}/{filename}")
 async def fetch_repodata(filename: str, platform: str = Path(pattern=PLATFORM_REGEX)):
     if not filename in {
-        "current_repodata",
-        "repodata",
-        "repodata_from_packages",
-        "patch_instructions",
+        "current_repodata.json",
+        "current_repodata.json.bz2",
+        "current_repodata.json.zst",
+        "repodata.json",
+        "repodata.json.bz2",
+        "repodata.json.zst",
+        "repodata_from_packages.json",
+        "repodata_from_packages.json.bz2",
+        "repodata_from_packages.json.zst",
+        "patch_instructions.json",
+        "patch_instructions.json.bz2",
+        "patch_instructions.json.zst",
     }:
         raise HTTPException(status_code=404, detail="File not found")
 
     # Construct the filepath
-    file_path = get_package_file_path(get_channel_dir(), platform, f"{filename}.json")
+    file_path = get_package_file_path(get_channel_dir(), platform, filename)
 
     try:
         # Return the file as a response
         return FileResponse(
-            path=file_path, media_type="application/json", filename=f"{filename}.json"
+            path=file_path, media_type="application/json", filename=filename
         )
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail="File not found") from e

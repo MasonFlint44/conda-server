@@ -26,7 +26,9 @@ class IndexManager:
     def is_watching(self) -> bool:
         return self._watch_task is not None
 
-    async def generate_index(self) -> None:
+    async def generate_index(
+        self, file_changes: set[tuple[Change, str]] | None = None
+    ) -> None:
         # Only allow one executing generation and one follow-up pending generation to
         # be executing at the same time.
         if self._pending_index_generation_lock.is_locked:
@@ -38,7 +40,13 @@ class IndexManager:
 
             try:
                 with self._index_generation_lock:
-                    await run_in_threadpool(cli.callback, get_channel_dir())  # type: ignore
+                    await run_in_threadpool(
+                        cli.callback,  # type: ignore
+                        get_channel_dir(),  # type: ignore
+                        channeldata=True,
+                        bz2=True,
+                        zst=True,
+                    )
             finally:
                 safely_remove_lock_file(f"{get_channel_dir()}/.index_generation.lock")
 
@@ -65,13 +73,13 @@ class IndexManager:
 
     async def _watch_channel_dir(self) -> None:
         # Watch the channel directory for changes
-        async for _ in awatch(
+        async for change in awatch(
             get_channel_dir(),
             stop_event=self._stop_watching_event,
             watch_filter=IndexFilter(),
         ):
             # Generate the index when a change is detected
-            await self.generate_index()
+            await self.generate_index(change)
 
     def _on_watch_done(self, task: asyncio.Task[None]) -> None:
         self._watch_task = None
@@ -86,17 +94,25 @@ class IndexManager:
 
 class IndexFilter(DefaultFilter):
     generated_files = {
+        ".index_generation.lock",
+        ".pending_index_generation.lock",
+        "current_repodata.json",
+        "current_repodata.json.bz2",
+        "current_repodata.json.zst",
         "repodata.json",
         "repodata.json.bz2",
         "repodata.json.zst",
         "repodata_from_packages.json",
+        "repodata_from_packages.json.bz2",
+        "repodata_from_packages.json.zst",
+        "patch_instructions.json",  # TODO: does --patch-generator create this file?
+        "patch_instructions.json.bz2",
+        "patch_instructions.json.zst",
+        "channeldata.json",
         "index.html",
-        "current_repodata.json",
         "rss.xml",
         "run_exports.json",
         "current_index.json",  # TODO: does --current-index-versions-file create this file?
-        "channeldata.json",
-        "patch_instructions.json",  # TODO: does --patch-generator create this file?
     }
     uuid_pattern = r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
     pattern = re.compile(rf".*\/({'|'.join(generated_files)})(\.{uuid_pattern})?")
