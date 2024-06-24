@@ -46,6 +46,7 @@ class IndexManager:
                         channeldata=True,
                         bz2=True,
                         zst=True,
+                        rss=True,
                     )
             finally:
                 safely_remove_lock_file(f"{get_channel_dir()}/.index_generation.lock")

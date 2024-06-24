@@ -12,16 +12,10 @@ from prometheus_fastapi_instrumentator import Instrumentator
 from .atomic import atomic_write
 from .hash import md5_in_chunks, sha256_in_chunks
 from .index import IndexManager
-from .utils import (
-    get_channel_dir,
-    get_package_file_name,
-    get_package_file_path,
-    get_platforms,
-)
+from .utils import get_channel_dir, get_package_file_name, get_platforms
 from .validation import PLATFORM_REGEX, validate_package_name
 
 # TODO: add custom metrics for package downloads
-# TODO: support rss feed
 # TODO: validate uploaded file is a valid conda package - at least validate platform
 # TODO: implement authentication - should be configurable for both download and upload
 # TODO: add logging
@@ -93,7 +87,7 @@ async def fetch_package(
     file_name = get_package_file_name(
         package_name, package_version, package_build, file_extension
     )
-    file_path = get_package_file_path(get_channel_dir(), platform, file_name)
+    file_path = os.path.join(get_channel_dir(), platform, file_name)
     media_type = (
         "application/x-tar"
         if file_extension == "tar.bz2"
@@ -125,7 +119,7 @@ async def upload_package(
     file_name = get_package_file_name(
         package_name, package_version, package_build, file_extension
     )
-    file_path = get_package_file_path(get_channel_dir(), platform, file_name)
+    file_path = os.path.join(get_channel_dir(), platform, file_name)
 
     def save_uploaded_file():
         # Open a file and write the uploaded content to it
@@ -158,7 +152,7 @@ async def delete_package(
     file_name = get_package_file_name(
         package_name, package_version, package_build, file_extension
     )
-    file_path = get_package_file_path(get_channel_dir(), platform, file_name)
+    file_path = os.path.join(get_channel_dir(), platform, file_name)
 
     # Check if file exists
     if not os.path.isfile(file_path):
@@ -185,7 +179,7 @@ async def fetch_sha256(
     file_name = get_package_file_name(
         package_name, package_version, package_build, file_extension
     )
-    file_path = get_package_file_path(get_channel_dir(), platform, file_name)
+    file_path = os.path.join(get_channel_dir(), platform, file_name)
 
     # Check if file exists
     if not os.path.isfile(file_path):
@@ -210,7 +204,7 @@ async def fetch_md5(
     file_name = get_package_file_name(
         package_name, package_version, package_build, file_extension
     )
-    file_path = get_package_file_path(get_channel_dir(), platform, file_name)
+    file_path = os.path.join(get_channel_dir(), platform, file_name)
 
     # Check if file exists
     if not os.path.isfile(file_path):
@@ -241,7 +235,7 @@ async def fetch_repodata(filename: str, platform: str = Path(pattern=PLATFORM_RE
         raise HTTPException(status_code=404, detail="File not found")
 
     # Construct the filepath
-    file_path = get_package_file_path(get_channel_dir(), platform, filename)
+    file_path = os.path.join(get_channel_dir(), platform, filename)
 
     try:
         # Return the file as a response
@@ -252,10 +246,13 @@ async def fetch_repodata(filename: str, platform: str = Path(pattern=PLATFORM_RE
         raise HTTPException(status_code=404, detail="File not found") from e
 
 
-@app.get("/channeldata.json")
-async def fetch_channeldata(platform: str = Path(pattern=PLATFORM_REGEX)):
+@app.get("/{filename}")
+async def fetch_channeldata(filename: str):
+    if not filename in {"channeldata.json" "rss.xml"}:
+        raise HTTPException(status_code=404, detail="File not found")
+
     # Construct the filepath
-    file_path = get_package_file_path(get_channel_dir(), platform, "channeldata.json")
+    file_path = os.path.join(get_channel_dir(), "channeldata.json")
 
     try:
         # Return the file as a response

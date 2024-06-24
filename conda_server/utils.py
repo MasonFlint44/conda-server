@@ -31,11 +31,6 @@ def get_package_file_name(
     return f"{package_name}-{package_version}-{package_build}.{file_extension}"
 
 
-@functools.lru_cache
-def get_package_file_path(packages: str, platform: str, file_name: str) -> str:
-    return os.path.join(packages, platform, file_name)
-
-
 @functools.lru_cache(maxsize=1)
 def get_channel_dir() -> str:
     return os.getenv(
