@@ -6,9 +6,9 @@ from conda_server.hash import md5_in_chunks, sha256_in_chunks
 def test_sha256_in_chunks(testpkg: Path):
     assert (
         sha256_in_chunks(str(testpkg))
-        == "4b8561fe7c20ff2cc8f58c4efbc1cb1102e4fe559fbafbe1bc564ec33134d3da"
+        == "f74353fc376dd8732662cde39e0103080cb7e03c6df4e13a6efa21cd484c48f6"
     )
 
 
 def test_md5_in_chunks(testpkg: Path):
-    assert md5_in_chunks(str(testpkg)) == "09cd4ce1cd95df5982ac45e8ac4ae5f5"
+    assert md5_in_chunks(str(testpkg)) == "ec370971727ce7870eba47f8ad2847ba"

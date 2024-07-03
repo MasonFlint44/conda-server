@@ -106,7 +106,7 @@ async def test_hash_sha256(testpkg: Path, async_client: AsyncClient, channel_dir
     assert response.status_code == 200
     assert (
         response.json()["sha256"]
-        == "4b8561fe7c20ff2cc8f58c4efbc1cb1102e4fe559fbafbe1bc564ec33134d3da"
+        == "f74353fc376dd8732662cde39e0103080cb7e03c6df4e13a6efa21cd484c48f6"
     )
 
 
@@ -122,7 +122,7 @@ async def test_hash_md5(testpkg: Path, async_client: AsyncClient, channel_dir: P
     # Get the md5 hash of the package
     response = await async_client.get(f"/linux-64/{basename(testpkg)}/hash/md5")
     assert response.status_code == 200
-    assert response.json()["md5"] == "09cd4ce1cd95df5982ac45e8ac4ae5f5"
+    assert response.json()["md5"] == "ec370971727ce7870eba47f8ad2847ba"
 
 
 async def test_get_package(testpkg: Path, async_client: AsyncClient, channel_dir: Path):

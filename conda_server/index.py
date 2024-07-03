@@ -1,11 +1,11 @@
 import asyncio
 import logging
-import re
+from typing import Iterable
 
 from conda_index.cli import cli
 from fastapi.concurrency import run_in_threadpool
 from filelock import FileLock
-from watchfiles import Change, DefaultFilter, awatch
+from watchfiles import Change, awatch
 
 from .atomic import safely_remove_lock_file
 from .utils import get_channel_dir
@@ -90,7 +90,7 @@ class IndexManager:
         async for change in awatch(
             get_channel_dir(),
             stop_event=self._stop_watching_event,
-            watch_filter=IndexFilter(),
+            watch_filter=FileExtensionFilter([".tar.bz2", ".conda"]),
         ):
             # Generate the index when a change is detected
             await self.generate_index(change)
@@ -106,35 +106,9 @@ class IndexManager:
         self.stop_watching()
 
 
-class IndexFilter(DefaultFilter):
-    generated_files = {
-        ".index_generation.lock",
-        ".pending_index_generation.lock",
-        "current_repodata.json",
-        "current_repodata.json.bz2",
-        "current_repodata.json.zst",
-        "repodata.json",
-        "repodata.json.bz2",
-        "repodata.json.zst",
-        "repodata_from_packages.json",
-        "repodata_from_packages.json.bz2",
-        "repodata_from_packages.json.zst",
-        "patch_instructions.json",  # TODO: does --patch-generator create this file?
-        "patch_instructions.json.bz2",
-        "patch_instructions.json.zst",
-        "channeldata.json",
-        "index.html",
-        "rss.xml",
-        "run_exports.json",
-        "current_index.json",  # TODO: does --current-index-versions-file create this file?
-    }
-    uuid_pattern = r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
-    pattern = re.compile(rf".*\/({'|'.join(generated_files)})(\.{uuid_pattern})?")
-    cache_dir = ".cache"
+class FileExtensionFilter:
+    def __init__(self, file_extensions: Iterable[str]) -> None:
+        self._select_file_extensions = file_extensions
 
     def __call__(self, change: Change, path: str) -> bool:
-        return (
-            super().__call__(change, path)
-            and not bool(self.pattern.match(path))
-            and self.cache_dir not in path
-        )
+        return any(path.endswith(ext) for ext in self._select_file_extensions)

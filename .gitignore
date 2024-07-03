@@ -1,6 +1,4 @@
-*.lock
 tests/test_output/
-*.tar.bz2
 condaenv.*.requirements.txt
 packages/
 
